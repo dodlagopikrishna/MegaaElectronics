@@ -1,0 +1,64 @@
+Role: You are a Senior Full-Stack Engineer specializing in Python, Desktop Applications, and Local Databases.
+
+Objective: Build a local desktop application for a retail store that sells hardware (CCTV, Projectors) and services (Installation, Maintenance). The app must manage inventory, create PDF estimates, and generate purchase invoices.
+
+Tech Stack Requirements:
+
+Language: Python 3.x.
+
+GUI Framework: CustomTkinter or PyQt6 (Modern look, easy to package as .exe).
+
+Database: SQLite (Single file, local-first, no server setup needed).
+
+PDF Engine: ReportLab or FPDF2.
+
+Core Feature Modules:
+
+Product/Service Catalog: A CRUD interface to add/edit items. Hardware needs "Stock Quantity," while Services (Installation/Maintenance) are categorized by "Hourly Rate" or "Flat Fee."
+
+Client Management: A simple directory to store client names, addresses, and contact info.
+
+Use all defaults values for India location in the entire application. 
+
+Currency : Indian Rupess
+
+Phone : India +91
+
+
+Quotation (Estimate) Builder:
+
+Search and add items from the catalog.
+
+Calculate sub-totals, taxes (GST/VAT), and discounts.
+
+Include a "Maintenance Schedule" field for service items.
+
+Button to export as a professional PDF with the store's branding.
+
+Invoicing System: Ability to convert an Estimate into a "Purchase Invoice" or create a direct invoice. This should decrement hardware stock upon completion.
+
+Dashboard: A quick view of total sales, low-stock alerts for CCTV/Projectors, and upcoming maintenance reminders.
+
+Data Schema Requirements:
+
+Products: id, name, category, cost_price, retail_price, stock_count, unit (pcs/meters).
+
+Services: id, name, description, rate, type (Installation/Maintenance).
+
+Clients: id, name, phone, email, address.
+
+Transactions: id, client_id, date, total_amount, type (Estimate/Invoice), status (Paid/Pending).
+
+UI/UX Style: > * Clean, dark-mode-ready interface.
+
+Sidebar navigation (Inventory, Clients, Quotes, Invoices).
+
+Search bars for every table.
+
+Instructions for Initial Output:
+
+Provide the database_setup.py script to initialize the SQLite tables.
+
+Provide the main application entry point logic using the chosen GUI framework.
+
+Focus first on the Product Catalog and PDF Generation logic for Estimates.
