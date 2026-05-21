@@ -120,6 +120,7 @@ def initialize_database():
 
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT NOT NULL DEFAULT '',
             username TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
             role_id INTEGER NOT NULL DEFAULT 0,
@@ -143,6 +144,7 @@ def initialize_database():
 
     _seed_roles_and_permissions()
     _migrate_to_multi_roles()
+    _migrate_user_full_name()
 
 
 def _seed_roles_and_permissions():
@@ -202,6 +204,20 @@ def _seed_roles_and_permissions():
                 )
 
     conn.commit()
+    conn.close()
+
+
+def _migrate_user_full_name():
+    """Add full_name column to existing databases."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(users)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "full_name" not in columns:
+        cursor.execute(
+            "ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT ''"
+        )
+        conn.commit()
     conn.close()
 
 

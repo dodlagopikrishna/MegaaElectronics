@@ -1,243 +1,180 @@
-import customtkinter as ctk
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from database_setup import initialize_database, seed_sample_data, DB_PATH
-from login_manager import bootstrap_admin, CurrentUser
-from views.login import LoginWindow
-from views.dashboard import DashboardView
-from views.products import ProductsView
-from views.clients import ClientsView
-from views.quotes import QuotesView
-from views.invoices import InvoicesView
-from views.user_management import UserManagementView
-from views.change_password import ChangePasswordView
-from responsive_ui import (
-    SIDEBAR_COLLAPSE_WIDTH,
-    SIDEBAR_WIDTH_FULL,
-    SIDEBAR_WIDTH_COMPACT,
-    apply_scroll_theme,
-)
+from nicegui import app, ui
+from nicegui.helpers.network import format_url
 
+from database_setup import initialize_database, seed_sample_data
+from login_manager import bootstrap_admin, CurrentUser
+from ui_theme import (
+    apply_page_background,
+    APP_BODY,
+    APP_FOOTER,
+    PRIMARY,
+    MAIN_PANE,
+    MAIN_SCROLL,
+    sidebar_nav_button,
+    sidebar_user_menu,
+    set_sidebar_nav_active,
+    SIDEBAR,
+)
+from views.login import render_login_page
+from views.dashboard import render_dashboard
+from views.products import render_products
+from views.clients import render_clients
+from views.quotes import render_quotes
+from views.invoices import render_invoices
+from views.user_management import render_user_management
+from views.change_password import render_change_password
+
+initialize_database()
+seed_sample_data()
+bootstrap_admin()
 
 NAV_PERMISSIONS = {
-    "dashboard":  "Dashboard",
-    "products":   "Products_View",
-    "clients":    "Clients_View",
-    "quotes":     "Quotes_View",
-    "invoices":   "Invoices_View",
-    "users":      "User_Management",
+    "dashboard": "Dashboard",
+    "products": "Products_View",
+    "clients": "Clients_View",
+    "quotes": "Quotes_View",
+    "invoices": "Invoices_View",
+    "users": "User_Management",
 }
 
 NAV_LABELS = {
     "dashboard": "Dashboard",
-    "products":  "Inventory",
-    "clients":   "Clients",
-    "quotes":    "Quotes",
-    "invoices":  "Invoices",
-    "users":     "User Mgmt",
+    "products": "Inventory",
+    "clients": "Clients",
+    "quotes": "Quotes",
+    "invoices": "Invoices",
+    "users": "User Mgmt",
 }
 
-VIEW_CLASSES = {
-    "dashboard": DashboardView,
-    "products":  ProductsView,
-    "clients":   ClientsView,
-    "quotes":    QuotesView,
-    "invoices":  InvoicesView,
-    "users":     UserManagementView,
-    "change_password": ChangePasswordView,
+NAV_ICONS = {
+    "dashboard": "dashboard",
+    "products": "inventory_2",
+    "clients": "people",
+    "quotes": "request_quote",
+    "invoices": "receipt_long",
+    "users": "manage_accounts",
 }
 
+VIEW_RENDERERS = {
+    "dashboard": render_dashboard,
+    "products": render_products,
+    "clients": render_clients,
+    "quotes": render_quotes,
+    "invoices": render_invoices,
+    "users": render_user_management,
+    "change_password": render_change_password,
+}
 
-class MEGAApp(ctk.CTk):
-    def __init__(self):
-        super().__init__()
+WINDOW_SIZE = (1280, 780)
+NATIVE_HOST = "127.0.0.1"
+NATIVE_PORT = 8765
 
-        self.title("MEGA Electronics - Retail Management")
-        self.geometry("1280x780")
-        self.minsize(800, 500)
-        self._sidebar_compact = False
 
-        ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("blue")
+def _is_authenticated():
+    return CurrentUser.get().is_authenticated
 
-        initialize_database()
-        seed_sample_data()
-        bootstrap_admin()
 
-        self.withdraw()
-        self.after(100, self._show_login)
+def _allowed_views():
+    current = CurrentUser.get()
+    order = ["dashboard", "products", "clients", "quotes", "invoices", "users"]
+    return [k for k in order if current.has_permission(NAV_PERMISSIONS[k])]
 
-    def _show_login(self):
-        LoginWindow(self, on_success=self._on_login_success)
 
-    def _on_login_success(self):
-        self.deiconify()
-        self._build_layout()
+@ui.page("/login")
+def login_page():
+    apply_page_background()
+    if _is_authenticated():
+        ui.navigate.to("/")
+        return
+    render_login_page()
 
-        allowed = self._get_allowed_views()
-        first_view = allowed[0] if allowed else "dashboard"
-        self.show_view(first_view)
 
-    def _get_allowed_views(self):
-        current = CurrentUser.get()
-        ordered_keys = ["dashboard", "products", "clients", "quotes", "invoices", "users"]
-        return [k for k in ordered_keys if current.has_permission(NAV_PERMISSIONS[k])]
+@ui.page("/")
+def home_page():
+    if not _is_authenticated():
+        ui.navigate.to("/login")
+        return
 
-    def _build_layout(self):
-        for w in self.winfo_children():
-            w.destroy()
+    apply_page_background(lock_viewport=True)
 
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+    allowed = _allowed_views()
+    state = {"view": allowed[0] if allowed else "dashboard"}
+    nav_buttons = {}
+    current = CurrentUser.get()
 
-        current = CurrentUser.get()
-        allowed = self._get_allowed_views()
+    def show_view(name: str):
+        state["view"] = name
+        for key, btn in nav_buttons.items():
+            set_sidebar_nav_active(btn, active=(key == name))
+        main_slot.clear()
+        renderer = VIEW_RENDERERS.get(name, render_dashboard)
+        with main_slot:
+            with ui.column().classes("w-full flex-1 min-h-0 h-full flex flex-col"):
+                renderer()
 
-        self.sidebar = ctk.CTkFrame(self, width=SIDEBAR_WIDTH_FULL, corner_radius=0, fg_color="#1a1a2e")
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_propagate(False)
-        self._nav_labels_full = {}
+    def logout():
+        CurrentUser.get().logout()
+        ui.navigate.to("/login")
 
-        self.brand_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        self.brand_frame.pack(fill="x", padx=15, pady=(20, 5))
-        brand_frame = self.brand_frame
+    with ui.row().classes(f"{APP_BODY} items-stretch"):
+        with ui.column().classes(SIDEBAR):
+            with ui.column().classes("shrink-0 px-4 py-5 gap-1 border-b border-gray-100"):
+                ui.label("MEGA").classes("text-xl font-bold").style(f"color:{PRIMARY}")
+                ui.label("Electronics").classes("text-sm text-gray-500")
 
-        ctk.CTkLabel(brand_frame, text="MEGA",
-                     font=ctk.CTkFont(size=26, weight="bold"),
-                     text_color="#2980b9").pack(anchor="w")
-        ctk.CTkLabel(brand_frame, text="Electronics",
-                     font=ctk.CTkFont(size=14),
-                     text_color="#7f8c8d").pack(anchor="w")
+            with ui.column().classes("shrink-0 px-3 py-4 gap-1 w-full"):
+                for key in allowed:
+                    label = NAV_LABELS[key]
+                    icon = NAV_ICONS[key]
 
-        user_frame = ctk.CTkFrame(self.sidebar, fg_color="#16213e", corner_radius=8)
-        user_frame.pack(fill="x", padx=15, pady=(10, 0))
-        ctk.CTkLabel(user_frame, text=f"{current.username}",
-                     font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=10, pady=(8, 0))
-        roles_text = ", ".join(current.role_names) if current.role_names else "No roles"
-        ctk.CTkLabel(user_frame, text=roles_text,
-                     font=ctk.CTkFont(size=11), text_color="#2980b9").pack(anchor="w", padx=10, pady=(0, 8))
+                    def make_nav(k=key):
+                        def navigate():
+                            show_view(k)
 
-        separator = ctk.CTkFrame(self.sidebar, height=2, fg_color="#2c3e50")
-        separator.pack(fill="x", padx=15, pady=15)
+                        return navigate
 
-        self.nav_buttons = {}
-        for key in allowed:
-            label = NAV_LABELS[key]
-            self._nav_labels_full[key] = label
-            btn = ctk.CTkButton(
-                self.sidebar,
-                text=f"  {label}",
-                anchor="w",
-                height=42,
-                corner_radius=8,
-                font=ctk.CTkFont(size=14),
-                fg_color="transparent",
-                text_color="#bdc3c7",
-                hover_color="#2c3e50",
-                command=lambda k=key: self.show_view(k),
+                    btn = sidebar_nav_button(label, icon, on_click=make_nav())
+                    nav_buttons[key] = btn
+
+            role_subtitle = (
+                ", ".join(current.role_names) if current.role_names else "MEGA Electronics"
             )
-            btn.pack(fill="x", padx=10, pady=2)
-            self.nav_buttons[key] = btn
-
-        spacer = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        spacer.pack(fill="both", expand=True)
-
-        self.change_pw_btn = ctk.CTkButton(
-            self.sidebar, text="Change Password", height=32,
-            font=ctk.CTkFont(size=11), fg_color="#2c3e50", hover_color="#34495e",
-            command=self._show_change_password,
-        )
-        self.change_pw_btn.pack(fill="x", padx=10, pady=(0, 5))
-
-        self.theme_btn = ctk.CTkButton(
-            self.sidebar, text="Toggle Light/Dark", height=32,
-            font=ctk.CTkFont(size=11), fg_color="#2c3e50", hover_color="#34495e",
-            command=self._toggle_theme,
-        )
-        self.theme_btn.pack(fill="x", padx=10, pady=(0, 5))
-
-        logout_btn = ctk.CTkButton(
-            self.sidebar, text="Logout", height=32,
-            font=ctk.CTkFont(size=11), fg_color="#c0392b", hover_color="#e74c3c",
-            command=self._logout,
-        )
-        logout_btn.pack(fill="x", padx=10, pady=(0, 5))
-
-        version_label = ctk.CTkLabel(self.sidebar, text="v2.0.0",
-                                     font=ctk.CTkFont(size=10), text_color="#555")
-        version_label.pack(pady=(0, 15))
-
-        self.main_area = ctk.CTkFrame(self, fg_color="transparent")
-        self.main_area.grid(row=0, column=1, sticky="nsew")
-
-        self.current_view = None
-        self._active_view = None
-        self.bind("<Configure>", self._on_window_resize, add="+")
-        self.after_idle(self._on_window_resize)
-
-    def show_view(self, view_name):
-        self._active_view = view_name
-        for key, btn in self.nav_buttons.items():
-            if key == view_name:
-                btn.configure(fg_color="#2980b9", text_color="white")
-            else:
-                btn.configure(fg_color="transparent", text_color="#bdc3c7")
-
-        if hasattr(self, "change_pw_btn"):
-            if view_name == "change_password":
-                self.change_pw_btn.configure(fg_color="#2980b9", text_color="white")
-            else:
-                self.change_pw_btn.configure(
-                    fg_color="#2c3e50", text_color=("gray10", "gray90")
+            with ui.column().classes("shrink-0 w-full mt-auto"):
+                sidebar_user_menu(
+                    display_name=current.display_name,
+                    username=current.username,
+                    subtitle=role_subtitle,
+                    on_password=lambda: show_view("change_password"),
+                    on_logout=logout,
                 )
 
-        if self.current_view:
-            self.current_view.destroy()
+        with ui.column().classes(MAIN_PANE):
+            main_slot = ui.column().classes(MAIN_SCROLL)
+            show_view(state["view"])
 
-        view_class = VIEW_CLASSES.get(view_name, DashboardView)
-        self.current_view = view_class(self.main_area)
-        self.current_view.pack(fill="both", expand=True)
-
-    def _on_window_resize(self, _event=None):
-        if not hasattr(self, "sidebar") or not self.sidebar.winfo_exists():
-            return
-        compact = self.winfo_width() < SIDEBAR_COLLAPSE_WIDTH
-        if compact == self._sidebar_compact:
-            return
-        self._sidebar_compact = compact
-        width = SIDEBAR_WIDTH_COMPACT if compact else SIDEBAR_WIDTH_FULL
-        self.sidebar.configure(width=width)
-        for key, btn in self.nav_buttons.items():
-            full = self._nav_labels_full.get(key, NAV_LABELS.get(key, key))
-            short = full[:4] if compact else full
-            btn.configure(text=f"  {short}", anchor="center" if compact else "w")
-        if hasattr(self, "change_pw_btn"):
-            self.change_pw_btn.configure(text="Password" if compact else "Change Password")
-        if hasattr(self, "theme_btn"):
-            self.theme_btn.configure(text="Theme" if compact else "Toggle Light/Dark")
-
-    def _show_change_password(self):
-        self.show_view("change_password")
-
-    def _toggle_theme(self):
-        current = ctk.get_appearance_mode()
-        new_mode = "Light" if current == "Dark" else "Dark"
-        ctk.set_appearance_mode(new_mode)
-        if self.current_view:
-            apply_scroll_theme(self.current_view)
-
-    def _logout(self):
-        CurrentUser.get().logout()
-        for w in self.winfo_children():
-            w.destroy()
-        self.current_view = None
-        self.withdraw()
-        self.after(100, self._show_login)
+    with ui.footer().classes(APP_FOOTER):
+        ui.label("MEGA Electronics — Retail Management")
+        ui.label("v2.0.0")
 
 
-if __name__ == "__main__":
-    app = MEGAApp()
-    app.mainloop()
+if __name__ in {"__main__", "__mp_main__"}:
+    # Native desktop window via pywebview (no external browser tab).
+    app.native.window_args["resizable"] = True
+    app.native.window_args["min_size"] = (800, 500)
+    app.native.window_args["url"] = format_url("http", NATIVE_HOST, NATIVE_PORT) + "/login"
+
+    ui.run(
+        title="MEGA Electronics - Retail Management",
+        native=True,
+        window_size=WINDOW_SIZE,
+        reload=False,
+        show=False,
+        host=NATIVE_HOST,
+        port=NATIVE_PORT,
+        storage_secret="mega-electronics-local-secret",
+    )

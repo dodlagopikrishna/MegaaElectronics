@@ -1,4 +1,4 @@
-"""Shared responsive layout helpers for MEGA Electronics (CustomTkinter)."""
+"""Legacy CustomTkinter helpers — app uses NiceGUI native mode (see main.py)."""
 
 import customtkinter as ctk
 import tkinter as tk

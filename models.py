@@ -239,6 +239,40 @@ def create_transaction(client_id, total_amount, subtotal, tax_rate, tax_amount,
     return tx_id
 
 
+def update_transaction(tx_id, client_id, total_amount, subtotal, tax_rate, tax_amount,
+                       discount_percent, discount_amount, notes, items):
+    """Update an existing estimate and replace its line items."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """UPDATE transactions SET
+           client_id=?, total_amount=?, subtotal=?, tax_rate=?, tax_amount=?,
+           discount_percent=?, discount_amount=?, notes=?
+           WHERE id=? AND type='Estimate'""",
+        (client_id, total_amount, subtotal, tax_rate, tax_amount,
+         discount_percent, discount_amount, notes, tx_id),
+    )
+    if cursor.rowcount == 0:
+        conn.close()
+        return False
+
+    cursor.execute("DELETE FROM transaction_items WHERE transaction_id = ?", (tx_id,))
+    for item in items:
+        cursor.execute(
+            """INSERT INTO transaction_items
+               (transaction_id, item_type, item_id, item_name, description,
+                quantity, unit_price, total_price, maintenance_schedule)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (tx_id, item["item_type"], item["item_id"], item["item_name"],
+             item.get("description", ""), item["quantity"], item["unit_price"],
+             item["total_price"], item.get("maintenance_schedule", "")),
+        )
+
+    conn.commit()
+    conn.close()
+    return True
+
+
 def update_transaction_status(tx_id, status):
     conn = get_connection()
     conn.execute("UPDATE transactions SET status = ? WHERE id = ?", (status, tx_id))

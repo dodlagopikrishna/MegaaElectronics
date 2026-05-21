@@ -1,133 +1,68 @@
-import customtkinter as ctk
-from tkinter import messagebox
+from nicegui import ui
+
 from login_manager import CurrentUser, change_own_password
-from responsive_ui import ResponsiveSplitView
+from ui_theme import (
+    page_shell,
+    card,
+    labeled_input,
+    split_panels,
+    form_actions_row,
+    success_button,
+    ghost_button,
+    notify_success,
+    PRIMARY,
+)
 
 
-class ChangePasswordView(ctk.CTkFrame):
-    """Change password for the logged-in user in the main content area."""
+def render_change_password():
+    user = CurrentUser.get()
+    content = page_shell("Change Password", wide=True)
 
-    def __init__(self, parent):
-        super().__init__(parent, fg_color="transparent")
-        self.build_ui()
-
-    def build_ui(self):
-        header = ctk.CTkLabel(
-            self,
-            text="Change Password",
-            font=ctk.CTkFont(size=24, weight="bold"),
+    with content:
+        list_panel, detail_panel = split_panels(
+            list_weight="lg:col-span-4", detail_weight="lg:col-span-8"
         )
-        header.pack(anchor="w", padx=20, pady=(20, 10))
 
-        self.split = ResponsiveSplitView(
-            self, table_weight=2, panel_weight=3, stack_at=700
-        )
-        self.split.content.pack_configure(padx=20, pady=(0, 20))
-        self.info_frame = self.split.table_inner
-        self.form_frame = self.split.panel_frame
+        with list_panel:
+            with card():
+                ui.label("Your Account").classes("text-lg font-bold mb-3")
+                ui.label("Full Name").classes("text-sm text-gray-500")
+                ui.label(user.display_name).classes("font-semibold mb-2")
+                ui.label("Username").classes("text-sm text-gray-500")
+                ui.label(user.username).classes("font-semibold mb-2")
+                ui.label("Roles").classes("text-sm text-gray-500")
+                roles = ", ".join(user.role_names) if user.role_names else "None"
+                ui.label(roles).classes("font-semibold").style(f"color:{PRIMARY}")
 
-        self._build_info_panel()
-        self._build_form_panel()
-        self.split.schedule_layout()
+        with detail_panel:
+            with card():
+                ui.label("New Password").classes("text-lg font-bold mb-3")
+                new_pw = labeled_input("New Password", password=True)
+                confirm_pw = labeled_input("Confirm New Password", password=True)
+                ui.label("Minimum 4 characters.").classes("text-xs text-gray-500")
+                status = ui.label("").classes("text-red-500 text-sm")
 
-    def _build_info_panel(self):
-        current = CurrentUser.get()
+                def clear_form():
+                    new_pw.value = ""
+                    confirm_pw.value = ""
+                    status.text = ""
 
-        card = ctk.CTkFrame(self.info_frame, corner_radius=12)
-        card.pack(fill="both", expand=True, padx=10, pady=10)
+                def save():
+                    p1 = (new_pw.value or "").strip()
+                    p2 = (confirm_pw.value or "").strip()
+                    if not p1:
+                        status.text = "Enter a new password."
+                        return
+                    if p1 != p2:
+                        status.text = "New passwords do not match."
+                        return
+                    ok, message = change_own_password(p1)
+                    if ok:
+                        notify_success("Your password has been changed.")
+                        clear_form()
+                    else:
+                        status.text = message
 
-        ctk.CTkLabel(
-            card,
-            text="Your Account",
-            font=ctk.CTkFont(size=16, weight="bold"),
-        ).pack(anchor="w", padx=20, pady=(20, 15))
-
-        for label, value in [
-            ("Username", current.username),
-            ("Roles", ", ".join(current.role_names) if current.role_names else "None"),
-        ]:
-            row = ctk.CTkFrame(card, fg_color="transparent")
-            row.pack(fill="x", padx=20, pady=4)
-            ctk.CTkLabel(
-                row, text=label, font=ctk.CTkFont(size=12), text_color="gray", width=80
-            ).pack(side="left", anchor="w")
-            ctk.CTkLabel(row, text=value, font=ctk.CTkFont(size=13, weight="bold")).pack(
-                side="left", anchor="w"
-            )
-
-    def _build_form_panel(self):
-        panel = ctk.CTkFrame(self.form_frame, corner_radius=12)
-        panel.pack(fill="both", expand=True, padx=10, pady=10)
-
-        ctk.CTkLabel(
-            panel,
-            text="New Password",
-            font=ctk.CTkFont(size=16, weight="bold"),
-        ).pack(anchor="w", padx=20, pady=(20, 10))
-
-        fields = ctk.CTkScrollableFrame(panel, fg_color="transparent")
-        fields.pack(fill="both", expand=True, padx=20, pady=5)
-
-        ctk.CTkLabel(fields, text="New Password").pack(anchor="w", pady=(5, 0))
-        self.new_pw_entry = ctk.CTkEntry(fields, show="*", height=36)
-        self.new_pw_entry.pack(fill="x", pady=(2, 10))
-
-        ctk.CTkLabel(fields, text="Confirm New Password").pack(anchor="w", pady=(5, 0))
-        self.confirm_pw_entry = ctk.CTkEntry(fields, show="*", height=36)
-        self.confirm_pw_entry.pack(fill="x", pady=(2, 10))
-
-        ctk.CTkLabel(
-            fields,
-            text="Minimum 4 characters.",
-            font=ctk.CTkFont(size=11),
-            text_color="gray",
-        ).pack(anchor="w", pady=(0, 5))
-
-        self.status_label = ctk.CTkLabel(
-            fields, text="", font=ctk.CTkFont(size=11), text_color="#e74c3c"
-        )
-        self.status_label.pack(anchor="w", pady=(5, 0))
-
-        btn_frame = ctk.CTkFrame(panel, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=20)
-
-        ctk.CTkButton(
-            btn_frame,
-            text="Save Password",
-            fg_color="#27ae60",
-            hover_color="#219a52",
-            command=self._save,
-        ).pack(side="left", padx=(0, 8))
-        ctk.CTkButton(
-            btn_frame,
-            text="Clear",
-            fg_color="gray40",
-            command=self._clear_form,
-        ).pack(side="left")
-
-        self.new_pw_entry.bind("<Return>", lambda e: self.confirm_pw_entry.focus())
-        self.confirm_pw_entry.bind("<Return>", lambda e: self._save())
-
-    def _clear_form(self):
-        self.new_pw_entry.delete(0, "end")
-        self.confirm_pw_entry.delete(0, "end")
-        self.status_label.configure(text="")
-
-    def _save(self):
-        new_pw = self.new_pw_entry.get().strip()
-        confirm_pw = self.confirm_pw_entry.get().strip()
-
-        if not new_pw:
-            self.status_label.configure(text="Enter a new password.")
-            return
-        if new_pw != confirm_pw:
-            self.status_label.configure(text="New passwords do not match.")
-            return
-
-        ok, message = change_own_password(new_pw)
-        if ok:
-            messagebox.showinfo("Done", "Your password has been changed.")
-            self._clear_form()
-            return
-
-        self.status_label.configure(text=message)
+                with form_actions_row():
+                    success_button("Save Password", on_click=save)
+                    ghost_button("Clear", on_click=clear_form)
