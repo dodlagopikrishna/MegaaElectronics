@@ -4,6 +4,7 @@ from nicegui import ui
 
 from models import get_all_clients, get_all_products, get_all_services
 from ui_theme import (
+    LIST_ROW,
     card,
     labeled_input,
     labeled_select,
@@ -120,9 +121,7 @@ def build_transaction_form(
                         return
                     for idx, item in enumerate(line_items):
                         tag = "[P]" if item["item_type"] == "product" else "[S]"
-                        with ui.row().classes(
-                            "w-full items-center gap-2 flex-wrap border-b border-gray-100 pb-2"
-                        ):
+                        with ui.row().classes(LIST_ROW):
                             ui.label(f"{tag} {item['item_name']}").classes("flex-grow text-sm")
                             qty = ui.number(value=item["quantity"], min=1, step=1).props(
                                 "outlined dense"

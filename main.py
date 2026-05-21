@@ -12,13 +12,16 @@ from ui_theme import (
     apply_page_background,
     APP_BODY,
     APP_FOOTER,
-    PRIMARY,
+    BRAND_ACCENT,
     MAIN_PANE,
     MAIN_SCROLL,
+    SIDEBAR,
+    SIDEBAR_HEADER,
+    TEXT_BRAND,
+    TEXT_CAPTION,
     sidebar_nav_button,
     sidebar_user_menu,
     set_sidebar_nav_active,
-    SIDEBAR,
 )
 from views.login import render_login_page
 from views.dashboard import render_dashboard
@@ -123,9 +126,9 @@ def home_page():
 
     with ui.row().classes(f"{APP_BODY} items-stretch"):
         with ui.column().classes(SIDEBAR):
-            with ui.column().classes("shrink-0 px-4 py-5 gap-1 border-b border-gray-100"):
-                ui.label("MEGA").classes("text-xl font-bold").style(f"color:{PRIMARY}")
-                ui.label("Electronics").classes("text-sm text-gray-500")
+            with ui.column().classes(SIDEBAR_HEADER):
+                ui.label("MEGA").classes(f"{TEXT_BRAND} {BRAND_ACCENT}")
+                ui.label("Electronics").classes(TEXT_CAPTION)
 
             with ui.column().classes("shrink-0 px-3 py-4 gap-1 w-full"):
                 for key in allowed:

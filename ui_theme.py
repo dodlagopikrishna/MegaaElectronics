@@ -1,4 +1,4 @@
-"""NiceGUI theme and layout helpers (UI Style Guidelines)."""
+"""NiceGUI theme and layout helpers (UI Style Guidelines, iOS glossy aesthetic)."""
 
 from contextlib import contextmanager
 
@@ -6,7 +6,19 @@ from nicegui import ui
 
 PRIMARY = "#3b82f6"
 SUCCESS = "#10b981"
-BACKGROUND = "#f8fafc"
+BACKGROUND = "#f2f2f7"
+
+# Typography (SF Pro / system stack applied via global CSS)
+TEXT_TITLE = "text-2xl font-bold text-slate-900 tracking-tight w-full shrink-0"
+TEXT_HEADING = "text-lg font-semibold text-slate-900 tracking-tight"
+TEXT_SUBHEADING = "text-base font-semibold text-slate-800"
+TEXT_LABEL = "text-sm font-medium text-slate-600 w-full"
+TEXT_BODY = "text-sm text-slate-600"
+TEXT_MUTED = "text-sm text-slate-500"
+TEXT_CAPTION = "text-xs text-slate-500"
+TEXT_BRAND = "text-xl font-bold tracking-tight"
+TEXT_BRAND_HERO = "text-4xl font-bold tracking-tight"
+BRAND_ACCENT = f"text-[{PRIMARY}]"
 
 PAGE_COLUMN = "max-w-4xl mx-auto w-full p-4"
 PAGE_WIDE = "max-w-6xl mx-auto w-full p-4"
@@ -14,83 +26,197 @@ PAGE_SHELL = "w-full flex-1 min-h-0 h-full flex flex-col gap-4"
 PAGE_CONTENT = "w-full flex-1 min-h-0 flex flex-col gap-4 min-h-0"
 SCROLL_PANEL = "w-full min-h-0 overflow-y-auto overflow-x-hidden"
 PANEL_OUTER = "min-h-0 h-full w-full flex flex-col overflow-hidden"
-# Fits content below app chrome (title, toolbar, footer); leaves room for action buttons.
 SCROLL_VIEWPORT = "height: calc(100dvh - 10.5rem); max-height: calc(100dvh - 10.5rem); width: 100%;"
 SPLIT_GRID = (
     "w-full flex-1 min-h-0 gap-4 grid grid-cols-1 lg:grid-cols-12 "
     "grid-rows-1 items-stretch min-h-0"
 )
-FORM_ACTIONS = "gap-2 mt-2 pt-3 shrink-0 w-full border-t border-gray-200"
-CARD = "rounded-xl border border-gray-200 shadow-sm bg-white w-full"
-CARD_HOVER = (
-    "rounded-xl border border-gray-200 shadow-sm bg-white w-full "
-    "hover:shadow-md transition-all duration-200"
+FORM_ACTIONS = (
+    "gap-2 mt-2 pt-3 shrink-0 w-full border-t border-slate-200/60"
 )
-BTN = "px-6 py-2 rounded-lg border shadow-sm backdrop-blur-md transition-all duration-200"
+CARD = (
+    "rounded-2xl border border-white/70 shadow-[0_4px_24px_rgba(15,23,42,0.06)] "
+    "bg-white/75 backdrop-blur-xl w-full"
+)
+CARD_HOVER = (
+    f"{CARD} hover:shadow-[0_8px_32px_rgba(15,23,42,0.1)] "
+    "hover:bg-white/85 transition-all duration-300 ease-out"
+)
+BTN = (
+    "px-6 py-2 rounded-full border shadow-[0_1px_3px_rgba(15,23,42,0.08),"
+    "inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md "
+    "transition-all duration-200 active:scale-[0.98]"
+)
 BTN_PRIMARY = (
-    f"{BTN} bg-blue-500/80 text-white border-blue-300/50 "
-    "hover:bg-blue-500/90 hover:shadow-md"
+    f"{BTN} bg-gradient-to-b from-blue-400/95 to-blue-600/95 text-white "
+    "border-blue-300/40 hover:from-blue-400 hover:to-blue-600 "
+    "hover:shadow-[0_4px_14px_rgba(59,130,246,0.35)]"
 )
 BTN_SUCCESS = (
-    f"{BTN} bg-emerald-500/75 text-white border-emerald-300/50 "
-    "hover:bg-emerald-500/90 hover:shadow-md"
+    f"{BTN} bg-gradient-to-b from-emerald-400/95 to-emerald-600/95 text-white "
+    "border-emerald-300/40 hover:from-emerald-400 hover:to-emerald-600 "
+    "hover:shadow-[0_4px_14px_rgba(16,185,129,0.35)]"
 )
 BTN_GHOST = (
-    f"{BTN} bg-white/55 text-gray-700 border-white/70 "
-    "hover:bg-white/75 hover:shadow-md"
+    f"{BTN} bg-white/70 text-slate-700 border-white/80 "
+    "hover:bg-white/90 hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)]"
 )
 BTN_DANGER = (
-    f"{BTN} bg-red-500/75 text-white border-red-300/50 "
-    "hover:bg-red-500/90 hover:shadow-md"
+    f"{BTN} bg-gradient-to-b from-red-400/95 to-red-600/95 text-white "
+    "border-red-300/40 hover:from-red-400 hover:to-red-600 "
+    "hover:shadow-[0_4px_14px_rgba(239,68,68,0.3)]"
 )
 NAV_ACTIVE = (
-    "px-4 py-2 rounded-lg font-semibold "
-    "bg-blue-500/25 text-blue-700 border border-blue-400/50 "
-    "backdrop-blur-md shadow-sm"
+    "px-4 py-2 rounded-xl font-semibold text-blue-700 "
+    "bg-blue-500/15 border border-blue-400/30 "
+    "shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur-md"
 )
 NAV_INACTIVE = (
-    "px-4 py-2 rounded-lg text-gray-600 border border-transparent "
-    "hover:bg-white/50 hover:text-gray-800 backdrop-blur-sm transition-all duration-200"
+    "px-4 py-2 rounded-xl text-slate-600 border border-transparent "
+    "hover:bg-white/55 hover:text-slate-800 backdrop-blur-sm "
+    "transition-all duration-200"
 )
 SIDEBAR = (
-    "w-56 shrink-0 h-full bg-white border-r border-gray-200 shadow-sm "
+    "w-56 shrink-0 h-full bg-white/65 border-r border-white/80 "
+    "shadow-[4px_0_24px_rgba(15,23,42,0.04)] backdrop-blur-2xl "
     "flex flex-col min-h-0 overflow-hidden"
 )
-MAIN_PANE = "flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden"
+SIDEBAR_HEADER = "shrink-0 px-4 py-5 gap-1 border-b border-slate-200/50"
+MAIN_PANE = "flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden bg-[#f2f2f7]/50"
 MAIN_SCROLL = "w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
 APP_SHELL = "w-full h-full min-h-0 flex flex-col overflow-hidden"
 APP_BODY = "flex-1 min-h-0 w-full flex overflow-hidden grow"
 APP_FOOTER = (
     "w-full flex-none shrink-0 px-4 py-2.5 items-center justify-between "
-    "text-sm text-gray-500 bg-white border-t border-gray-200 z-10"
+    "text-sm text-slate-500 bg-white/70 border-t border-slate-200/60 "
+    "backdrop-blur-xl z-10"
 )
 SIDEBAR_ACTIVE = (
-    "w-full justify-start gap-3 px-3 py-2.5 rounded-lg font-semibold "
-    "bg-blue-500/25 text-blue-700 border border-blue-400/50 "
-    "backdrop-blur-md shadow-sm"
+    "w-full justify-start gap-3 px-3 py-2.5 rounded-xl font-semibold "
+    "text-blue-700 bg-blue-500/15 border border-blue-400/30 "
+    "shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] backdrop-blur-md"
 )
 SIDEBAR_INACTIVE = (
-    "w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-gray-600 "
-    "border border-transparent hover:bg-white/50 hover:text-gray-800 "
+    "w-full justify-start gap-3 px-3 py-2.5 rounded-xl text-slate-600 "
+    "border border-transparent hover:bg-white/50 hover:text-slate-800 "
     "backdrop-blur-sm transition-all duration-200"
 )
 SIDEBAR_USER = (
-    "w-full px-3 py-3 border-t border-gray-200 cursor-pointer "
-    "hover:bg-gray-50 transition-colors duration-200"
+    "w-full px-3 py-3 border-t border-slate-200/50 cursor-pointer "
+    "hover:bg-white/45 transition-colors duration-200"
 )
-USER_MENU = "min-w-[240px] shadow-xl"
-USER_MENU_LOGOUT = "text-red-400 font-medium"
+USER_MENU = (
+    "min-w-[260px] rounded-2xl overflow-hidden "
+    "shadow-[0_12px_40px_rgba(15,23,42,0.14)] border border-white/80 "
+    "bg-white/90 backdrop-blur-2xl"
+)
+USER_MENU_HEADER = "px-4 py-3 gap-0.5 border-b border-slate-200/60 w-full"
+USER_MENU_LOGOUT = "text-red-500 font-medium"
 TAB_ACTIVE = NAV_ACTIVE
 TAB_INACTIVE = (
-    "px-6 py-2 rounded-lg text-gray-600 border border-transparent "
-    "bg-white/40 hover:bg-white/60 backdrop-blur-sm transition-all duration-200"
+    "px-6 py-2 rounded-xl text-slate-600 border border-transparent "
+    "bg-white/45 hover:bg-white/65 backdrop-blur-sm transition-all duration-200"
 )
-INPUT = "w-full"
+INPUT = "w-full ios-field"
 BTN_PROPS = "unelevated dense no-caps"
+LIST_ROW = "w-full items-center gap-2 flex-wrap border-b border-slate-200/40 pb-2"
+
+_GLOBAL_STYLES_APPLIED = False
+
+_IOS_GLOBAL_CSS = """
+:root {
+  --ios-primary: #3b82f6;
+  --ios-success: #10b981;
+  --ios-bg: #f2f2f7;
+}
+html, body, .nicegui-content {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.q-field--outlined .q-field__control,
+.q-field--filled .q-field__control {
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.82) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.q-field--outlined .q-field__control:before {
+  border-color: rgba(148, 163, 184, 0.45) !important;
+}
+.q-field--focused .q-field__control:before {
+  border-color: var(--ios-primary) !important;
+  border-width: 2px !important;
+}
+.q-field__label, .q-field__native, .q-field__input {
+  color: #334155 !important;
+  font-weight: 500;
+}
+.q-field__label {
+  font-size: 0.8125rem;
+}
+.q-btn {
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+}
+.q-menu {
+  border-radius: 16px !important;
+  overflow: hidden;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+.q-item {
+  min-height: 44px;
+  border-radius: 10px;
+  margin: 2px 6px;
+  font-weight: 500;
+}
+.q-item:hover {
+  background: rgba(59, 130, 246, 0.08) !important;
+}
+.q-dialog .q-card {
+  border-radius: 20px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15) !important;
+}
+.q-scrollarea__thumb {
+  background: rgba(148, 163, 184, 0.45) !important;
+  border-radius: 999px !important;
+  opacity: 0.85;
+}
+.q-badge {
+  border-radius: 999px !important;
+  font-weight: 600;
+  padding: 2px 8px;
+}
+.q-notification {
+  border-radius: 14px !important;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12) !important;
+}
+.q-avatar {
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+}
+"""
+
+
+def _apply_global_styles():
+    global _GLOBAL_STYLES_APPLIED
+    if _GLOBAL_STYLES_APPLIED:
+        return
+    ui.add_css(_IOS_GLOBAL_CSS)
+    _GLOBAL_STYLES_APPLIED = True
 
 
 def apply_page_background(*, lock_viewport: bool = False):
     """Apply page background; lock viewport to prevent document scroll on app shell."""
+    _apply_global_styles()
     base = f"bg-[{BACKGROUND}] m-0"
     if lock_viewport:
         ui.query("html").classes("h-full min-h-0 overflow-hidden")
@@ -106,7 +232,7 @@ def page_shell(title: str, *, wide: bool = False):
     """Page title + flex body; pair with split_panels or page_scroll_body()."""
     col_classes = PAGE_WIDE if wide else PAGE_COLUMN
     with ui.column().classes(f"{col_classes} {PAGE_SHELL}"):
-        ui.label(title).classes("text-2xl font-bold text-gray-800 w-full shrink-0")
+        ui.label(title).classes(TEXT_TITLE)
         content = ui.column().classes(PAGE_CONTENT)
     return content
 
@@ -114,16 +240,14 @@ def page_shell(title: str, *, wide: bool = False):
 @contextmanager
 def page_scroll_body():
     """Scrollable page body for single-column layouts (e.g. dashboard)."""
-    scroll = ui.scroll_area().classes("w-full flex-1 min-h-0").props("visible")
-    scroll.style(SCROLL_VIEWPORT)
-    with scroll:
-        body = ui.column().classes("w-full gap-4")
-        yield body
+    # Use flex + overflow on a column — 100dvh scroll areas collapse in native pywebview.
+    with ui.column().classes(f"w-full flex-1 min-h-0 {SCROLL_PANEL} gap-4"):
+        yield
 
 
 def form_actions_row():
     """Save/Cancel row inside a form card."""
-    return ui.row().classes("gap-2 mt-4 pt-3 w-full border-t border-gray-200")
+    return ui.row().classes(f"gap-2 mt-4 pt-3 w-full border-t border-slate-200/60")
 
 
 def card(interactive: bool = False):
@@ -132,7 +256,7 @@ def card(interactive: bool = False):
 
 
 def labeled_input(label: str, *, password: bool = False, placeholder: str = ""):
-    ui.label(label).classes("text-sm font-medium text-gray-700 w-full")
+    ui.label(label).classes(TEXT_LABEL)
     props = "outlined dense"
     if password:
         inp = ui.input(placeholder=placeholder, password=True, password_toggle_button=True).props(props)
@@ -143,13 +267,13 @@ def labeled_input(label: str, *, password: bool = False, placeholder: str = ""):
 
 
 def labeled_select(label: str, options: list, *, with_input: bool = True):
-    ui.label(label).classes("text-sm font-medium text-gray-700 w-full")
+    ui.label(label).classes(TEXT_LABEL)
     sel = ui.select(options, with_input=with_input).props("outlined dense").classes(INPUT)
     return sel
 
 
 def labeled_textarea(label: str, *, rows: int = 3):
-    ui.label(label).classes("text-sm font-medium text-gray-700 w-full")
+    ui.label(label).classes(TEXT_LABEL)
     ta = ui.textarea().props(f"outlined dense rows={rows}").classes(INPUT)
     return ta
 
@@ -202,23 +326,21 @@ def sidebar_user_menu(
     on_password,
     on_logout,
 ):
-    """Datadog-style account trigger at the bottom of the sidebar with a popover menu."""
+    """Account trigger at the bottom of the sidebar with a frosted popover menu."""
     with ui.button().props("flat no-caps align=left").classes(f"{SIDEBAR_USER} w-full"):
         with ui.row().classes("w-full items-center gap-3 no-wrap"):
             ui.avatar(icon="person", color="primary").classes("shrink-0")
             with ui.column().classes("gap-0 min-w-0 flex-grow text-left"):
                 ui.label(display_name).classes(
-                    "text-sm font-semibold text-gray-800 truncate w-full"
+                    f"text-sm font-semibold text-slate-800 truncate w-full"
                 )
-                ui.label(subtitle).classes("text-xs text-gray-500 truncate w-full")
+                ui.label(subtitle).classes(f"{TEXT_CAPTION} truncate w-full")
 
-        with ui.menu().props(
-            'dark anchor="top right" self="bottom left"'
-        ).classes(USER_MENU):
-            with ui.column().classes("px-4 py-3 gap-0.5 border-b border-gray-600 w-full"):
-                ui.label("Personal Settings").classes("text-sm font-bold")
-                ui.label(display_name).classes("text-xs text-gray-300 truncate w-full")
-                ui.label(f"@{username}").classes("text-xs text-gray-400 truncate w-full")
+        with ui.menu().props('anchor="top right" self="bottom left"').classes(USER_MENU):
+            with ui.column().classes(USER_MENU_HEADER):
+                ui.label("Personal Settings").classes(TEXT_SUBHEADING)
+                ui.label(display_name).classes(f"{TEXT_CAPTION} truncate w-full")
+                ui.label(f"@{username}").classes("text-xs text-slate-400 truncate w-full")
 
             ui.menu_item("Log Out", on_click=on_logout).props(
                 "icon=logout"
@@ -256,20 +378,20 @@ def stat_cards_grid():
 def stat_card(title: str, value: str, accent: str = PRIMARY):
     with ui.card().classes(f"{CARD} p-4 w-full"):
         with ui.row().classes("w-full items-stretch gap-3"):
-            ui.element("div").classes("w-1 rounded-full").style(f"background:{accent}")
+            ui.element("div").classes("w-1.5 rounded-full shadow-sm").style(f"background:{accent}")
             with ui.column().classes("gap-1"):
-                ui.label(title).classes("text-sm text-gray-500")
-                ui.label(value).classes("text-xl font-bold text-gray-800")
+                ui.label(title).classes(TEXT_CAPTION)
+                ui.label(value).classes("text-xl font-bold text-slate-900 tracking-tight")
 
 
 def empty_state(message: str):
-    ui.label(message).classes("text-gray-500 text-center w-full py-8")
+    ui.label(message).classes(f"{TEXT_MUTED} text-center w-full py-8")
 
 
 def confirm_dialog(title: str, message: str, on_confirm):
     with ui.dialog() as dialog, ui.card().classes(f"{CARD} p-4"):
-        ui.label(title).classes("text-lg font-bold")
-        ui.label(message).classes("text-gray-600")
+        ui.label(title).classes(TEXT_HEADING)
+        ui.label(message).classes(TEXT_BODY)
         with ui.row().classes("w-full justify-end gap-2 mt-4"):
             ghost_button("Cancel", on_click=dialog.close)
 

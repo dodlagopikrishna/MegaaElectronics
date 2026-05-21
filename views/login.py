@@ -1,7 +1,17 @@
 from nicegui import ui
 
 from login_manager import authenticate, CurrentUser
-from ui_theme import CARD, PRIMARY, labeled_input, primary_button, apply_page_background
+from ui_theme import (
+    BRAND_ACCENT,
+    CARD,
+    TEXT_BRAND_HERO,
+    TEXT_CAPTION,
+    TEXT_HEADING,
+    TEXT_MUTED,
+    labeled_input,
+    primary_button,
+    apply_page_background,
+)
 
 
 def render_login_page():
@@ -9,12 +19,12 @@ def render_login_page():
 
     with ui.column().classes("w-full min-h-screen items-center justify-center p-4"):
         with ui.column().classes("w-full max-w-md gap-2 items-center"):
-            ui.label("MEGA").classes("text-4xl font-bold").style(f"color:{PRIMARY}")
-            ui.label("Electronics").classes("text-lg text-gray-500")
-            ui.label("Retail Management System").classes("text-sm text-gray-400 mb-4")
+            ui.label("MEGA").classes(f"{TEXT_BRAND_HERO} {BRAND_ACCENT}")
+            ui.label("Electronics").classes("text-lg text-slate-500")
+            ui.label("Retail Management System").classes(f"{TEXT_MUTED} mb-4")
 
             with ui.card().classes(f"{CARD} p-6 w-full"):
-                ui.label("Sign In").classes("text-xl font-bold text-gray-800 mb-4 w-full")
+                ui.label("Sign In").classes(f"{TEXT_HEADING} mb-4 w-full")
 
                 username = labeled_input("Username", placeholder="Enter username")
                 password = labeled_input("Password", password=True, placeholder="Enter password")
