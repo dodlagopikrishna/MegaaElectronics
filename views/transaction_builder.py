@@ -88,25 +88,32 @@ def build_transaction_form(
             tax_enabled_initial = bool(initial_transaction.get("tax_enabled")) if initial_transaction else False
             apply_tax = ui.switch("Apply GST", value=tax_enabled_initial)
 
-            with ui.grid().classes("w-full gap-4 grid-cols-1 md:grid-cols-2"):
-                tax_inp = labeled_input("Tax Rate (%)")
-                if initial_transaction and tax_enabled_initial:
-                    tax_inp.value = str(initial_transaction.get("tax_rate", DEFAULT_GST_RATE))
-                else:
-                    tax_inp.value = str(DEFAULT_GST_RATE)
-                tax_inp.set_visibility(tax_enabled_initial)
-                discount_inp = labeled_input("Discount (%)")
-                discount_inp.value = (
-                    str(initial_transaction.get("discount_percent", 0))
-                    if initial_transaction
-                    else "0"
-                )
-                notes = labeled_textarea("Notes")
-                if initial_transaction:
-                    notes.value = initial_transaction.get("notes", "") or ""
+            with ui.row().classes("w-full gap-4"):
+                tax_wrap = ui.column().classes("flex-1 gap-0")
+                with tax_wrap:
+                    tax_inp = labeled_input("Tax Rate (%)")
+                    if initial_transaction and tax_enabled_initial:
+                        tax_inp.value = str(initial_transaction.get("tax_rate", DEFAULT_GST_RATE))
+                    else:
+                        tax_inp.value = str(DEFAULT_GST_RATE)
+                if not tax_enabled_initial:
+                    tax_wrap.classes("invisible")
+                with ui.column().classes("flex-1 gap-0"):
+                    discount_inp = labeled_input("Discount (%)")
+                    discount_inp.value = (
+                        str(initial_transaction.get("discount_percent", 0))
+                        if initial_transaction
+                        else "0"
+                    )
+            notes = labeled_textarea("Notes")
+            if initial_transaction:
+                notes.value = initial_transaction.get("notes", "") or ""
 
             def on_tax_toggle():
-                tax_inp.set_visibility(apply_tax.value)
+                if apply_tax.value:
+                    tax_wrap.classes(remove="invisible")
+                else:
+                    tax_wrap.classes(add="invisible")
                 update_totals()
 
             apply_tax.on_value_change(lambda _: on_tax_toggle())
