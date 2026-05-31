@@ -1,5 +1,5 @@
 Act as a Senior Python UI Developer. I need you to write NiceGUI code following these strict Style Guidelines:
-
+Fluid animations
 1. Responsiveness: > - Use a desktop-first approach. All containers should be w-full by default.
 
 Use Tailwind breakpoints (e.g., md:, lg:) for layout shifts.

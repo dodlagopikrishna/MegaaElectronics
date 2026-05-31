@@ -2,6 +2,8 @@ import bcrypt
 from database_setup import get_connection
 
 DEFAULT_ADMIN_USERNAME = "admin"
+DEFAULT_ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD_SYNC_KEY = "default_admin_password_v1"
 
 
 class CurrentUser:
@@ -98,15 +100,17 @@ def authenticate(username, password):
     return dict(user), [row["module_name"] for row in perms]
 
 
+def _ensure_app_metadata(conn):
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS app_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')"
+    )
+
+
 def bootstrap_admin():
-    """Create default admin account if no users exist."""
+    """Ensure the default admin account exists with documented credentials."""
     conn = get_connection()
     cursor = conn.cursor()
-
-    cursor.execute("SELECT COUNT(*) FROM users")
-    if cursor.fetchone()[0] > 0:
-        conn.close()
-        return False
+    _ensure_app_metadata(conn)
 
     cursor.execute("SELECT id FROM roles WHERE role_name = 'Admin'")
     admin_role = cursor.fetchone()
@@ -114,22 +118,62 @@ def bootstrap_admin():
         conn.close()
         return False
 
-    default_hash = hash_password("admin123")
-    cursor.execute(
-        """INSERT INTO users (full_name, username, password_hash, role_id, is_active, must_change_password)
-           VALUES (?, ?, ?, ?, 1, 0)""",
-        ("Administrator", DEFAULT_ADMIN_USERNAME, default_hash, admin_role["id"]),
-    )
-    user_id = cursor.lastrowid
+    admin_role_id = admin_role["id"]
+    changed = False
 
-    cursor.execute(
-        "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)",
-        (user_id, admin_role["id"]),
-    )
+    cursor.execute("SELECT value FROM app_metadata WHERE key = ?", (ADMIN_PASSWORD_SYNC_KEY,))
+    if cursor.fetchone() is None:
+        cursor.execute(
+            "SELECT id, password_hash FROM users WHERE username = ?",
+            (DEFAULT_ADMIN_USERNAME,),
+        )
+        admin_user = cursor.fetchone()
+        if admin_user and not verify_password(
+            DEFAULT_ADMIN_PASSWORD, admin_user["password_hash"]
+        ):
+            cursor.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (hash_password(DEFAULT_ADMIN_PASSWORD), admin_user["id"]),
+            )
+            changed = True
+        cursor.execute(
+            "INSERT INTO app_metadata (key, value) VALUES (?, '1')",
+            (ADMIN_PASSWORD_SYNC_KEY,),
+        )
+        changed = True
 
-    conn.commit()
+    cursor.execute("SELECT * FROM users WHERE username = ?", (DEFAULT_ADMIN_USERNAME,))
+    admin_user = cursor.fetchone()
+
+    if admin_user is None:
+        default_hash = hash_password(DEFAULT_ADMIN_PASSWORD)
+        cursor.execute(
+            """INSERT INTO users (full_name, username, password_hash, role_id, is_active, must_change_password)
+               VALUES (?, ?, ?, ?, 1, 0)""",
+            ("Administrator", DEFAULT_ADMIN_USERNAME, default_hash, admin_role_id),
+        )
+        user_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)",
+            (user_id, admin_role_id),
+        )
+        changed = True
+    else:
+        cursor.execute(
+            "SELECT 1 FROM user_roles WHERE user_id = ? AND role_id = ?",
+            (admin_user["id"], admin_role_id),
+        )
+        if cursor.fetchone() is None:
+            cursor.execute(
+                "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
+                (admin_user["id"], admin_role_id),
+            )
+            changed = True
+
+    if changed:
+        conn.commit()
     conn.close()
-    return True
+    return changed
 
 
 def is_default_admin(user_id):

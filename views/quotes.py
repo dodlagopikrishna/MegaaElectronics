@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import time
 
 from nicegui import ui
 
@@ -14,6 +15,7 @@ from models import (
     convert_estimate_to_invoice,
 )
 from pdf_generator import generate_transaction_pdf
+from whatsapp_share import share_transaction_pdf_via_whatsapp
 from login_manager import CurrentUser
 from ui_theme import (
     page_shell,
@@ -26,6 +28,7 @@ from ui_theme import (
     confirm_dialog,
     notify_success,
     notify_error,
+    show_pdf_in_detail_panel,
     SUCCESS,
     INPUT,
 )
@@ -65,6 +68,7 @@ def render_quotes():
                     )
                     with ui.row().classes("gap-2 flex-wrap mt-2"):
                         ghost_button("View", on_click=lambda e=eid: view_estimate(e))
+                        ghost_button("View PDF", on_click=lambda e=eid: view_pdf(e, on_back=show_empty_detail))
                         if can_edit:
                             ghost_button("Edit", on_click=lambda e=eid: show_edit_builder(e))
                         if can_export:
@@ -178,10 +182,35 @@ def render_quotes():
                 with ui.row().classes("gap-2"):
                     if user.has_permission("Quotes_Create"):
                         ghost_button("Edit", on_click=lambda: show_edit_builder(est_id))
+                    ghost_button(
+                        "View PDF",
+                        on_click=lambda: view_pdf(est_id, on_back=lambda: view_estimate(est_id)),
+                    )
                     if user.has_permission("Export_PDF"):
                         ghost_button("Export PDF", on_click=lambda: export_pdf(est_id))
                     ghost_button("Convert to Invoice", on_click=lambda: to_invoice(est_id))
                     ghost_button("Back", on_click=show_empty_detail)
+
+    def view_pdf(est_id, *, on_back=None):
+        tx = get_transaction(est_id)
+        items = get_transaction_items(est_id)
+        if not tx or not items:
+            return
+        path = generate_transaction_pdf(tx, items)
+        filename = os.path.basename(path)
+        pdf_url = f"/exports/{filename}?t={int(time.time())}"
+        def send_whatsapp():
+            share_transaction_pdf_via_whatsapp(tx, items)
+            notify_success("Opening WhatsApp…")
+
+        show_pdf_in_detail_panel(
+            detail_panel,
+            pdf_url=pdf_url,
+            title=f"Estimate EST-{est_id:04d}",
+            subtitle=f"{tx.get('client_name', 'Walk-in')} · {tx['date']}",
+            on_back=on_back or show_empty_detail,
+            on_whatsapp=send_whatsapp,
+        )
 
     def export_pdf(est_id):
         tx = get_transaction(est_id)

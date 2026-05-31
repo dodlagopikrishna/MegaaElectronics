@@ -8,21 +8,30 @@ from nicegui.helpers.network import format_url
 
 from database_setup import initialize_database, seed_sample_data
 from login_manager import bootstrap_admin, CurrentUser
+from pdf_generator import OUTPUT_DIR
+from store_config import STORE_GSTIN, STORE_NAME, STORE_PHONE_DISPLAY, STORE_STORAGE_SECRET
 from ui_theme import (
+    ASSETS_DIR,
     apply_page_background,
     APP_BODY,
     APP_FOOTER,
-    BRAND_ACCENT,
     MAIN_PANE,
     MAIN_SCROLL,
+    MAIN_VIEW_SHELL,
     SIDEBAR,
     SIDEBAR_HEADER,
-    TEXT_BRAND,
-    TEXT_CAPTION,
+    VIEW_TRANSITION_MS,
+    brand_logo,
+    nav_view_direction,
     sidebar_nav_button,
     sidebar_user_menu,
     set_sidebar_nav_active,
+    trigger_main_view_exit,
 )
+
+app.add_static_files("/assets", ASSETS_DIR)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+app.add_static_files("/exports", OUTPUT_DIR)
 from views.login import render_login_page
 from views.dashboard import render_dashboard
 from views.products import render_products
@@ -51,7 +60,7 @@ NAV_LABELS = {
     "clients": "Clients",
     "quotes": "Quotes",
     "invoices": "Invoices",
-    "users": "User Mgmt",
+    "users": "User Management",
 }
 
 NAV_ICONS = {
@@ -106,19 +115,54 @@ def home_page():
     apply_page_background(lock_viewport=True)
 
     allowed = _allowed_views()
-    state = {"view": allowed[0] if allowed else "dashboard"}
+    nav_order = allowed + ["change_password"]
+    state = {"view": allowed[0] if allowed else "dashboard", "mounted": False}
     nav_buttons = {}
+    pending_view = {"name": None}
+    swap_timer = {"handle": None}
     current = CurrentUser.get()
 
-    def show_view(name: str):
+    def _mount_view(name: str, *, direction: str | None):
         state["view"] = name
         for key, btn in nav_buttons.items():
             set_sidebar_nav_active(btn, active=(key == name))
         main_slot.clear()
         renderer = VIEW_RENDERERS.get(name, render_dashboard)
+        enter = f" view-enter-{direction}" if direction else ""
         with main_slot:
-            with ui.column().classes("w-full flex-1 min-h-0 h-full flex flex-col"):
+            with ui.column().classes(f"{MAIN_VIEW_SHELL}{enter}"):
                 renderer()
+
+    def show_view(name: str):
+        if name == state["view"] and state["mounted"]:
+            return
+        pending_view["name"] = name
+
+        if swap_timer["handle"] is not None:
+            swap_timer["handle"].cancel()
+            swap_timer["handle"] = None
+
+        def complete_swap():
+            swap_timer["handle"] = None
+            target = pending_view["name"]
+            if target is None:
+                return
+            direction = nav_view_direction(state["view"], target, nav_order)
+            _mount_view(target, direction=direction)
+
+        if not state["mounted"]:
+            state["mounted"] = True
+            _mount_view(name, direction=None)
+            return
+
+        direction = nav_view_direction(state["view"], name, nav_order)
+
+        trigger_main_view_exit(direction)
+        swap_timer["handle"] = ui.timer(
+            VIEW_TRANSITION_MS / 1000.0,
+            complete_swap,
+            once=True,
+        )
 
     def logout():
         CurrentUser.get().logout()
@@ -127,8 +171,7 @@ def home_page():
     with ui.row().classes(f"{APP_BODY} items-stretch"):
         with ui.column().classes(SIDEBAR):
             with ui.column().classes(SIDEBAR_HEADER):
-                ui.label("MEGA").classes(f"{TEXT_BRAND} {BRAND_ACCENT}")
-                ui.label("Electronics").classes(TEXT_CAPTION)
+                brand_logo(variant="sidebar")
 
             with ui.column().classes("shrink-0 px-3 py-4 gap-1 w-full"):
                 for key in allowed:
@@ -144,9 +187,7 @@ def home_page():
                     btn = sidebar_nav_button(label, icon, on_click=make_nav())
                     nav_buttons[key] = btn
 
-            role_subtitle = (
-                ", ".join(current.role_names) if current.role_names else "MEGA Electronics"
-            )
+            role_subtitle = ", ".join(current.role_names) if current.role_names else "Staff"
             with ui.column().classes("shrink-0 w-full mt-auto"):
                 sidebar_user_menu(
                     display_name=current.display_name,
@@ -161,8 +202,8 @@ def home_page():
             show_view(state["view"])
 
     with ui.footer().classes(APP_FOOTER):
-        ui.label("MEGA Electronics — Retail Management")
-        ui.label("v2.0.0")
+        ui.label(f"{STORE_NAME}  |  Tel: {STORE_PHONE_DISPLAY}  |  GSTIN: {STORE_GSTIN}")
+        ui.label("Retail Management System v1.0.0")
 
 
 if __name__ in {"__main__", "__mp_main__"}:
@@ -172,12 +213,12 @@ if __name__ in {"__main__", "__mp_main__"}:
     app.native.window_args["url"] = format_url("http", NATIVE_HOST, NATIVE_PORT) + "/login"
 
     ui.run(
-        title="MEGA Electronics - Retail Management",
+        title=f"{STORE_NAME} - Retail Management System",
         native=True,
         window_size=WINDOW_SIZE,
         reload=False,
         show=False,
         host=NATIVE_HOST,
         port=NATIVE_PORT,
-        storage_secret="mega-electronics-local-secret",
+        storage_secret=STORE_STORAGE_SECRET,
     )

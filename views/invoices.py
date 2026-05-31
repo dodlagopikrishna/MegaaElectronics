@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import time
 
 from nicegui import ui
 
@@ -14,6 +15,7 @@ from models import (
     decrement_stock,
 )
 from pdf_generator import generate_transaction_pdf
+from whatsapp_share import share_transaction_pdf_via_whatsapp
 from login_manager import CurrentUser
 from ui_theme import (
     page_shell,
@@ -26,6 +28,7 @@ from ui_theme import (
     empty_state,
     confirm_dialog,
     notify_success,
+    show_pdf_in_detail_panel,
     SUCCESS,
     INPUT,
 )
@@ -65,6 +68,7 @@ def render_invoices():
                     ).style(f"color:{status_color}")
                     with ui.row().classes("gap-2 flex-wrap mt-2"):
                         ghost_button("View", on_click=lambda e=iid: view_invoice(e))
+                        ghost_button("View PDF", on_click=lambda e=iid: view_pdf(e, on_back=show_empty_detail))
                         if can_export:
                             ghost_button("Export PDF", on_click=lambda e=iid: export_pdf(e))
                         if inv["status"] == "Pending":
@@ -136,11 +140,36 @@ def render_invoices():
                             ui.label(lbl).classes("font-bold" if lbl == "Total" else "")
                             ui.label(val).classes("font-bold" if lbl == "Total" else "")
                 with ui.row().classes("gap-2"):
+                    ghost_button(
+                        "View PDF",
+                        on_click=lambda: view_pdf(inv_id, on_back=lambda: view_invoice(inv_id)),
+                    )
                     if user.has_permission("Export_PDF"):
                         ghost_button("Export PDF", on_click=lambda: export_pdf(inv_id))
                     if tx["status"] == "Pending":
                         success_button("Mark as Paid", on_click=lambda: mark_paid(inv_id))
                     ghost_button("Back", on_click=show_empty_detail)
+
+    def view_pdf(inv_id, *, on_back=None):
+        tx = get_transaction(inv_id)
+        items = get_transaction_items(inv_id)
+        if not tx or not items:
+            return
+        path = generate_transaction_pdf(tx, items)
+        filename = os.path.basename(path)
+        pdf_url = f"/exports/{filename}?t={int(time.time())}"
+        def send_whatsapp():
+            share_transaction_pdf_via_whatsapp(tx, items)
+            notify_success("Opening WhatsApp…")
+
+        show_pdf_in_detail_panel(
+            detail_panel,
+            pdf_url=pdf_url,
+            title=f"Invoice INV-{inv_id:04d}",
+            subtitle=f"{tx.get('client_name', 'Walk-in')} · {tx['date']} · {tx['status']}",
+            on_back=on_back or show_empty_detail,
+            on_whatsapp=send_whatsapp,
+        )
 
     def export_pdf(inv_id):
         tx = get_transaction(inv_id)

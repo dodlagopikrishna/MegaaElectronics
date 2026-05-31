@@ -2,11 +2,21 @@ import sqlite3
 import os
 import sys
 import platform
+import shutil
+from datetime import datetime
+
+from store_config import (
+    LEGACY_DB_FILENAME,
+    STORE_DB_FILENAME,
+    STORE_NAME,
+)
+
+_LEGACY_APP_DATA_NAMES = ("Megaa Electronics", "MEGA Electronics")
 
 
 def _get_app_data_dir():
     """Return the platform-appropriate application data directory."""
-    app_name = "MEGA Electronics"
+    app_name = STORE_NAME
     system = platform.system()
 
     if system == "Windows":
@@ -18,10 +28,95 @@ def _get_app_data_dir():
         return os.path.join(os.path.expanduser("~"), f".{app_name.lower().replace(' ', '_')}")
 
 
+def _legacy_app_data_dir(name):
+    system = platform.system()
+    if system == "Windows":
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+        return os.path.join(base, name)
+    if system == "Darwin":
+        return os.path.join(os.path.expanduser("~"), "Library", "Application Support", name)
+    return os.path.join(os.path.expanduser("~"), f".{name.lower().replace(' ', '_')}")
+
+
+def _migrate_app_data_dir_if_needed(target_dir):
+    """Copy data from older application support folder names."""
+    if os.path.isdir(target_dir) and os.listdir(target_dir):
+        return
+
+    os.makedirs(target_dir, exist_ok=True)
+    for legacy_name in _LEGACY_APP_DATA_NAMES:
+        if legacy_name == STORE_NAME:
+            continue
+        legacy_dir = _legacy_app_data_dir(legacy_name)
+        if not os.path.isdir(legacy_dir):
+            continue
+        for item in os.listdir(legacy_dir):
+            src = os.path.join(legacy_dir, item)
+            dst = os.path.join(target_dir, item)
+            if not os.path.exists(dst):
+                shutil.copy2(src, dst)
+        return
+
+
 APP_DATA_DIR = _get_app_data_dir()
+_migrate_app_data_dir_if_needed(APP_DATA_DIR)
 os.makedirs(APP_DATA_DIR, exist_ok=True)
 
-DB_PATH = os.path.join(APP_DATA_DIR, "mega_electronics.db")
+DB_PATH = os.path.join(APP_DATA_DIR, STORE_DB_FILENAME)
+
+# Previous versions stored the database next to the application source.
+LEGACY_DB_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    LEGACY_DB_FILENAME,
+)
+
+
+def _db_table_count(db_path, table):
+    if not os.path.isfile(db_path):
+        return 0
+    conn = sqlite3.connect(db_path)
+    try:
+        return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+    except sqlite3.Error:
+        return 0
+    finally:
+        conn.close()
+
+
+def _migrate_legacy_database_if_needed():
+    """Import the project-folder database when app data is missing or only bootstrapped."""
+    old_app_db = os.path.join(APP_DATA_DIR, LEGACY_DB_FILENAME)
+    if not os.path.isfile(DB_PATH) and os.path.isfile(old_app_db):
+        shutil.copy2(old_app_db, DB_PATH)
+        return True
+
+    legacy = LEGACY_DB_PATH
+    if not os.path.isfile(legacy):
+        return False
+
+    if not os.path.isfile(DB_PATH):
+        shutil.copy2(legacy, DB_PATH)
+        return True
+
+    legacy_users = _db_table_count(legacy, "users")
+    if legacy_users == 0:
+        return False
+
+    app_users = _db_table_count(DB_PATH, "users")
+    legacy_transactions = _db_table_count(legacy, "transactions")
+    app_transactions = _db_table_count(DB_PATH, "transactions")
+
+    # Fresh bootstrap creates a single default admin; legacy DB has the real account data.
+    should_import = legacy_users > app_users or (
+        legacy_transactions > app_transactions and legacy_users >= app_users
+    )
+    if not should_import:
+        return False
+
+    backup_name = f"{STORE_DB_FILENAME}.backup-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    shutil.copy2(DB_PATH, os.path.join(APP_DATA_DIR, backup_name))
+    shutil.copy2(legacy, DB_PATH)
+    return True
 
 
 def get_connection():
@@ -32,6 +127,7 @@ def get_connection():
 
 
 def initialize_database():
+    _migrate_legacy_database_if_needed()
     conn = get_connection()
     cursor = conn.cursor()
 

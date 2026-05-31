@@ -2,12 +2,10 @@ from nicegui import ui
 
 from login_manager import authenticate, CurrentUser
 from ui_theme import (
-    BRAND_ACCENT,
     CARD,
-    TEXT_BRAND_HERO,
-    TEXT_CAPTION,
     TEXT_HEADING,
     TEXT_MUTED,
+    brand_logo,
     labeled_input,
     primary_button,
     apply_page_background,
@@ -17,11 +15,10 @@ from ui_theme import (
 def render_login_page():
     apply_page_background()
 
-    with ui.column().classes("w-full min-h-screen items-center justify-center p-4"):
-        with ui.column().classes("w-full max-w-md gap-2 items-center"):
-            ui.label("MEGA").classes(f"{TEXT_BRAND_HERO} {BRAND_ACCENT}")
-            ui.label("Electronics").classes("text-lg text-slate-500")
-            ui.label("Retail Management System").classes(f"{TEXT_MUTED} mb-4")
+    with ui.column().classes("w-full min-h-screen items-center justify-center p-4 sm:p-6"):
+        with ui.column().classes("w-full max-w-md gap-3 items-center"):
+            brand_logo(variant="hero")
+            ui.label("Retail Management System").classes(f"{TEXT_MUTED} mb-2 text-center w-full")
 
             with ui.card().classes(f"{CARD} p-6 w-full"):
                 ui.label("Sign In").classes(f"{TEXT_HEADING} mb-4 w-full")

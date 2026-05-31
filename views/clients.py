@@ -1,7 +1,16 @@
 from nicegui import ui
 
+from country_phone_codes import (
+    DEFAULT_PHONE_LABEL,
+    PHONE_CODE_OPTIONS,
+    dial_code_from_selection,
+    dial_code_to_label,
+    format_phone,
+    parse_phone,
+)
 from models import get_all_clients, add_client, update_client, delete_client, get_client
 from login_manager import CurrentUser
+from whatsapp_share import share_client_via_whatsapp
 from ui_theme import (
     page_shell,
     card,
@@ -18,6 +27,7 @@ from ui_theme import (
     notify_warning,
     notify_success,
     INPUT,
+    TEXT_LABEL,
 )
 
 
@@ -41,13 +51,21 @@ def render_clients():
                     with ui.row().classes("w-full justify-between items-center flex-wrap gap-2"):
                         with ui.column().classes("gap-0"):
                             ui.label(c["name"]).classes("font-semibold")
-                            ui.label(f"{c['phone']} · {c['email']}").classes("text-sm text-gray-500")
-                        if can_edit or can_delete:
-                            with ui.row().classes("gap-2"):
-                                if can_edit:
-                                    ghost_button("Edit", on_click=lambda cid=c["id"]: edit_client(cid))
-                                if can_delete:
-                                    danger_button("Delete", on_click=lambda cid=c["id"]: del_client(cid))
+                            addr = (c.get("address") or "").strip() or "—"
+                            ui.label(f"{c['phone']} · {addr}").classes("text-sm text-gray-500")
+                        with ui.row().classes("gap-2"):
+                            ghost_button(
+                                "WhatsApp",
+                                on_click=lambda client=c: _share_client(client),
+                            )
+                            if can_edit:
+                                ghost_button("Edit", on_click=lambda cid=c["id"]: edit_client(cid))
+                            if can_delete:
+                                danger_button("Delete", on_click=lambda cid=c["id"]: del_client(cid))
+
+    def _share_client(client):
+        share_client_via_whatsapp(client)
+        notify_success("Opening WhatsApp…")
 
     def show_empty_form():
         state["editing_id"] = None
@@ -62,12 +80,25 @@ def render_clients():
             with card():
                 ui.label("Edit Client" if data else "Add Client").classes("text-lg font-bold mb-3")
                 name = labeled_input("Name")
-                phone = labeled_input("Phone")
+                ui.label("Phone").classes(TEXT_LABEL)
+                with ui.row().classes("w-full gap-2 items-start flex-nowrap"):
+                    phone_code = (
+                        ui.select(PHONE_CODE_OPTIONS, value=DEFAULT_PHONE_LABEL, with_input=True)
+                        .props("outlined dense")
+                        .classes("shrink-0 w-44 sm:w-52")
+                    )
+                    phone_number = (
+                        ui.input(placeholder="Phone number")
+                        .props("outlined dense")
+                        .classes(f"{INPUT} flex-grow min-w-0")
+                    )
                 email = labeled_input("Email")
                 address = labeled_textarea("Address")
                 if data:
                     name.value = data["name"]
-                    phone.value = data.get("phone", "")
+                    code, number = parse_phone(data.get("phone", ""))
+                    phone_code.value = dial_code_to_label(code)
+                    phone_number.value = number
                     email.value = data.get("email", "")
                     address.value = data.get("address", "")
 
@@ -76,7 +107,10 @@ def render_clients():
                     if not n:
                         notify_warning("Client name is required.")
                         return
-                    ph = (phone.value or "").strip()
+                    ph = format_phone(
+                        dial_code_from_selection(phone_code.value),
+                        phone_number.value,
+                    )
                     em = (email.value or "").strip()
                     ad = (address.value or "").strip()
                     if state["editing_id"]:
@@ -87,8 +121,27 @@ def render_clients():
                     refresh_table()
                     show_empty_form()
 
+                def share_current():
+                    n = (name.value or "").strip()
+                    if not n:
+                        notify_warning("Enter a client name to share.")
+                        return
+                    share_client_via_whatsapp(
+                        {
+                            "name": n,
+                            "phone": format_phone(
+                                dial_code_from_selection(phone_code.value),
+                                phone_number.value,
+                            ),
+                            "email": (email.value or "").strip(),
+                            "address": (address.value or "").strip(),
+                        }
+                    )
+                    notify_success("Opening WhatsApp…")
+
                 with form_actions_row():
                     success_button("Save", on_click=save)
+                    ghost_button("WhatsApp", on_click=share_current)
                     ghost_button("Cancel", on_click=show_empty_form)
 
     def edit_client(client_id):

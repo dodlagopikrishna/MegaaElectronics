@@ -1,8 +1,18 @@
 """NiceGUI theme and layout helpers (UI Style Guidelines, iOS glossy aesthetic)."""
 
 from contextlib import contextmanager
+from pathlib import Path
 
 from nicegui import ui
+
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+
+from store_config import LEGACY_LOGO_FILENAME, STORE_LOGO_FILENAME
+
+_logo_path = ASSETS_DIR / STORE_LOGO_FILENAME
+if not _logo_path.is_file():
+    _logo_path = ASSETS_DIR / LEGACY_LOGO_FILENAME
+LOGO_URL = f"/assets/{_logo_path.name}"
 
 PRIMARY = "#3b82f6"
 SUCCESS = "#10b981"
@@ -81,9 +91,19 @@ SIDEBAR = (
     "shadow-[4px_0_24px_rgba(15,23,42,0.04)] backdrop-blur-2xl "
     "flex flex-col min-h-0 overflow-hidden"
 )
-SIDEBAR_HEADER = "shrink-0 px-4 py-5 gap-1 border-b border-slate-200/50"
+SIDEBAR_HEADER = "shrink-0 px-4 py-4 gap-0 border-b border-slate-200/50 w-full items-start"
+BRAND_LOGO_HERO = (
+    "mega-brand-logo mega-brand-logo--hero w-full max-w-[240px] sm:max-w-[280px] "
+    "h-auto object-contain mx-auto"
+)
+BRAND_LOGO_SIDEBAR = (
+    "mega-brand-logo mega-brand-logo--sidebar w-full max-w-[168px] "
+    "h-auto object-contain object-left"
+)
 MAIN_PANE = "flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden bg-[#f2f2f7]/50"
 MAIN_SCROLL = "w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+MAIN_VIEW_SHELL = "mega-main-view w-full flex-1 min-h-0 h-full flex flex-col"
+VIEW_TRANSITION_MS = 320
 APP_SHELL = "w-full h-full min-h-0 flex flex-col overflow-hidden"
 APP_BODY = "flex-1 min-h-0 w-full flex overflow-hidden grow"
 APP_FOOTER = (
@@ -203,6 +223,88 @@ html, body, .nicegui-content {
 .q-avatar {
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
 }
+/* macOS / iOS–style main content transitions (sidebar navigation) */
+.mega-main-view {
+  will-change: transform, opacity;
+  transform-origin: center top;
+}
+.view-enter-forward {
+  animation: megaViewEnterForward 0.42s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.view-enter-back {
+  animation: megaViewEnterBack 0.42s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.view-exit-forward {
+  animation: megaViewExitForward 0.28s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  pointer-events: none;
+}
+.view-exit-back {
+  animation: megaViewExitBack 0.28s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  pointer-events: none;
+}
+@keyframes megaViewEnterForward {
+  from {
+    opacity: 0;
+    transform: translate3d(32px, 6px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+@keyframes megaViewEnterBack {
+  from {
+    opacity: 0;
+    transform: translate3d(-32px, 6px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+@keyframes megaViewExitForward {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-24px, 0, 0) scale(0.99);
+  }
+}
+@keyframes megaViewExitBack {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(24px, 0, 0) scale(0.99);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mega-main-view.view-enter-forward,
+  .mega-main-view.view-enter-back,
+  .mega-main-view.view-exit-forward,
+  .mega-main-view.view-exit-back {
+    animation: none !important;
+  }
+}
+.mega-brand-logo {
+  display: block;
+  flex-shrink: 0;
+}
+.mega-brand-logo--hero {
+  max-height: min(28vw, 160px);
+}
+.mega-brand-logo--sidebar {
+  max-height: 72px;
+}
+@media (max-width: 640px) {
+  .mega-brand-logo--hero {
+    max-height: 120px;
+  }
+}
 """
 
 
@@ -212,6 +314,12 @@ def _apply_global_styles():
         return
     ui.add_css(_IOS_GLOBAL_CSS)
     _GLOBAL_STYLES_APPLIED = True
+
+
+def brand_logo(*, variant: str = "hero"):
+    """Responsive MEGAA Electronics logo. variant: 'hero' (login) or 'sidebar' (app shell)."""
+    classes = BRAND_LOGO_HERO if variant == "hero" else BRAND_LOGO_SIDEBAR
+    return ui.image(LOGO_URL).props("no-spinner").classes(classes)
 
 
 def apply_page_background(*, lock_viewport: bool = False):
@@ -318,6 +426,37 @@ def set_sidebar_nav_active(btn, *, active: bool):
     btn.classes(replace=SIDEBAR_ACTIVE if active else SIDEBAR_INACTIVE)
 
 
+def nav_view_direction(previous: str, target: str, order: list[str]) -> str:
+    """Return 'forward' or 'back' for iOS-style horizontal content transitions."""
+    try:
+        prev_i = order.index(previous)
+        next_i = order.index(target)
+    except ValueError:
+        return "forward"
+    if next_i > prev_i:
+        return "forward"
+    if next_i < prev_i:
+        return "back"
+    return "forward"
+
+
+def trigger_main_view_exit(direction: str) -> None:
+    """Animate the current main pane out before it is cleared."""
+    ui.run_javascript(
+        f"""
+        () => {{
+            const pane = document.querySelector('.mega-main-view');
+            if (!pane) return;
+            pane.classList.remove(
+                'view-enter-forward', 'view-enter-back',
+                'view-exit-forward', 'view-exit-back'
+            );
+            pane.classList.add('view-exit-{direction}');
+        }}
+        """
+    )
+
+
 def sidebar_user_menu(
     *,
     display_name: str,
@@ -369,6 +508,40 @@ def split_panels(*, list_weight: str = "lg:col-span-5", detail_weight: str = "lg
             with detail_scroll:
                 detail_panel = ui.column().classes("w-full gap-4")
     return list_panel, detail_panel
+
+
+def show_pdf_in_detail_panel(
+    panel,
+    *,
+    pdf_url: str,
+    title: str,
+    subtitle: str = "",
+    on_back=None,
+    on_whatsapp=None,
+):
+    """Render a PDF preview in the master/detail right pane."""
+    panel.clear()
+    with panel:
+        with ui.column().classes("w-full min-h-0 gap-3"):
+            with ui.row().classes("w-full items-start justify-between gap-2 flex-wrap shrink-0"):
+                with ui.column().classes("gap-0 min-w-0"):
+                    ui.label(title).classes(TEXT_HEADING)
+                    if subtitle:
+                        ui.label(subtitle).classes(TEXT_CAPTION)
+                with ui.row().classes("gap-2 shrink-0"):
+                    if on_whatsapp:
+                        ghost_button("Send to Whatsapp", on_click=on_whatsapp)
+                    if on_back:
+                        ghost_button("Back", on_click=on_back)
+            (
+                ui.element("iframe")
+                .props(f'src="{pdf_url}" title="{title}"')
+                .classes(
+                    "w-full border-0 rounded-xl bg-white "
+                    "shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]"
+                )
+                .style("height: calc(100dvh - 13rem); min-height: 480px;")
+            )
 
 
 def stat_cards_grid():
