@@ -189,7 +189,7 @@ def is_default_admin(user_id):
 def get_all_users():
     conn = get_connection()
     users_rows = conn.execute(
-        "SELECT id, full_name, username, is_active, created_at FROM users ORDER BY username"
+        "SELECT id, full_name, username, phone, is_active, created_at FROM users ORDER BY username"
     ).fetchall()
 
     result = []
@@ -206,11 +206,44 @@ def get_all_users():
             "id": u["id"],
             "full_name": u["full_name"] or "",
             "username": u["username"],
+            "phone": u["phone"] or "",
             "is_active": u["is_active"],
             "created_at": u["created_at"],
             "role_ids": [r["role_id"] for r in roles],
             "role_names": [r["role_name"] for r in roles],
             "is_default_admin": u["username"] == DEFAULT_ADMIN_USERNAME,
+        })
+
+    conn.close()
+    return result
+
+
+def get_active_users_with_phone():
+    """Return active users who have a phone number set, with role info."""
+    conn = get_connection()
+    users_rows = conn.execute(
+        "SELECT id, full_name, username, phone FROM users WHERE is_active = 1 AND phone != '' ORDER BY full_name"
+    ).fetchall()
+
+    result = []
+    for u in users_rows:
+        roles = conn.execute(
+            """SELECT r.role_name FROM user_roles ur
+               JOIN roles r ON ur.role_id = r.id
+               WHERE ur.user_id = ?
+               ORDER BY r.id""",
+            (u["id"],),
+        ).fetchall()
+
+        display = (u["full_name"] or "").strip() or u["username"]
+        role_str = ", ".join(r["role_name"] for r in roles)
+        result.append({
+            "id": u["id"],
+            "full_name": u["full_name"] or "",
+            "username": u["username"],
+            "phone": u["phone"],
+            "display_name": display,
+            "roles": role_str,
         })
 
     conn.close()
@@ -224,15 +257,15 @@ def get_all_roles():
     return [dict(r) for r in rows]
 
 
-def create_user(full_name, username, password, role_ids, *, is_active=1):
+def create_user(full_name, username, password, role_ids, *, is_active=1, phone=""):
     conn = get_connection()
     cursor = conn.cursor()
     pw_hash = hash_password(password)
     primary_role = role_ids[0] if role_ids else 0
     cursor.execute(
-        """INSERT INTO users (full_name, username, password_hash, role_id, is_active, must_change_password)
-           VALUES (?, ?, ?, ?, ?, 0)""",
-        (full_name, username, pw_hash, primary_role, is_active),
+        """INSERT INTO users (full_name, username, password_hash, phone, role_id, is_active, must_change_password)
+           VALUES (?, ?, ?, ?, ?, ?, 0)""",
+        (full_name, username, pw_hash, phone, primary_role, is_active),
     )
     user_id = cursor.lastrowid
 
@@ -246,20 +279,20 @@ def create_user(full_name, username, password, role_ids, *, is_active=1):
     conn.close()
 
 
-def update_user(user_id, full_name, username, role_ids, is_active):
+def update_user(user_id, full_name, username, role_ids, is_active, phone=""):
     conn = get_connection()
     cursor = conn.cursor()
 
     if is_default_admin(user_id):
         cursor.execute(
-            "UPDATE users SET full_name = ?, username = ?, is_active = ? WHERE id = ?",
-            (full_name, username, is_active, user_id),
+            "UPDATE users SET full_name = ?, username = ?, phone = ?, is_active = ? WHERE id = ?",
+            (full_name, username, phone, is_active, user_id),
         )
     else:
         primary_role = role_ids[0] if role_ids else 0
         cursor.execute(
-            "UPDATE users SET full_name = ?, username = ?, role_id = ?, is_active = ? WHERE id = ?",
-            (full_name, username, primary_role, is_active, user_id),
+            "UPDATE users SET full_name = ?, username = ?, phone = ?, role_id = ?, is_active = ? WHERE id = ?",
+            (full_name, username, phone, primary_role, is_active, user_id),
         )
         cursor.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
         for rid in role_ids:

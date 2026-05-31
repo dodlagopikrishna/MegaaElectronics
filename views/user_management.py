@@ -1,5 +1,13 @@
 from nicegui import ui
 
+from country_phone_codes import (
+    DEFAULT_PHONE_LABEL,
+    PHONE_CODE_OPTIONS,
+    dial_code_from_selection,
+    dial_code_to_label,
+    format_phone,
+    parse_phone,
+)
 from login_manager import (
     get_all_users,
     get_all_roles,
@@ -25,6 +33,8 @@ from ui_theme import (
     notify_warning,
     notify_success,
     PRIMARY,
+    INPUT,
+    TEXT_LABEL,
 )
 
 
@@ -91,6 +101,19 @@ def render_user_management():
                 if not data:
                     password = labeled_input("Password", password=True)
 
+                ui.label("Phone (for WhatsApp)").classes(TEXT_LABEL)
+                with ui.row().classes("w-full gap-2 items-start flex-nowrap"):
+                    phone_code = (
+                        ui.select(PHONE_CODE_OPTIONS, value=DEFAULT_PHONE_LABEL, with_input=True)
+                        .props("outlined dense")
+                        .classes("shrink-0 w-44 sm:w-52")
+                    )
+                    phone_number = (
+                        ui.input(placeholder="Phone number")
+                        .props("outlined dense")
+                        .classes(f"{INPUT} flex-grow min-w-0")
+                    )
+
                 active_switch = ui.switch(
                     "Active (can sign in)",
                     value=True if not data else bool(data["is_active"]),
@@ -111,6 +134,9 @@ def render_user_management():
                 if data:
                     full_name.value = data.get("full_name") or ""
                     username.value = data["username"]
+                    code, number = parse_phone(data.get("phone", ""))
+                    phone_code.value = dial_code_to_label(code)
+                    phone_number.value = number
 
                 def save():
                     fn = (full_name.value or "").strip()
@@ -121,6 +147,10 @@ def render_user_management():
                     if not un:
                         notify_warning("Username is required.")
                         return
+                    ph = format_phone(
+                        dial_code_from_selection(phone_code.value),
+                        phone_number.value,
+                    )
                     is_active = int(active_switch.value)
                     if (
                         state["editing_id"]
@@ -143,14 +173,14 @@ def render_user_management():
                             if editing_def:
                                 conn = get_connection()
                                 conn.execute(
-                                    """UPDATE users SET full_name = ?, username = ?, is_active = ?
+                                    """UPDATE users SET full_name = ?, username = ?, phone = ?, is_active = ?
                                        WHERE id = ?""",
-                                    (fn, un, is_active, state["editing_id"]),
+                                    (fn, un, ph, is_active, state["editing_id"]),
                                 )
                                 conn.commit()
                                 conn.close()
                             else:
-                                update_user(state["editing_id"], fn, un, selected, is_active)
+                                update_user(state["editing_id"], fn, un, selected, is_active, phone=ph)
                         except Exception as e:
                             notify_warning(f"Could not update user: {e}")
                             return
@@ -160,7 +190,7 @@ def render_user_management():
                             notify_warning("Password must be at least 4 characters.")
                             return
                         try:
-                            create_user(fn, un, pw, selected, is_active=is_active)
+                            create_user(fn, un, pw, selected, is_active=is_active, phone=ph)
                         except Exception as e:
                             notify_warning(f"Could not create user: {e}")
                             return

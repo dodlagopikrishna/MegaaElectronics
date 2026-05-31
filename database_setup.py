@@ -1,14 +1,10 @@
 import sqlite3
 import os
 import platform
-import shutil
-from datetime import datetime
 
 from store_config import STORE_DB_FILENAME, STORE_NAME
 
-SCHEMA_VERSION = 3
-
-_LEGACY_APP_DATA_NAMES = ("Megaa Electronics", "MEGA Electronics")
+SCHEMA_VERSION = 1
 
 
 def _get_app_data_dir():
@@ -25,38 +21,7 @@ def _get_app_data_dir():
         return os.path.join(os.path.expanduser("~"), f".{app_name.lower().replace(' ', '_')}")
 
 
-def _legacy_app_data_dir(name):
-    system = platform.system()
-    if system == "Windows":
-        base = os.environ.get("APPDATA", os.path.expanduser("~"))
-        return os.path.join(base, name)
-    if system == "Darwin":
-        return os.path.join(os.path.expanduser("~"), "Library", "Application Support", name)
-    return os.path.join(os.path.expanduser("~"), f".{name.lower().replace(' ', '_')}")
-
-
-def _migrate_app_data_dir_if_needed(target_dir):
-    """Copy data from older application support folder names."""
-    if os.path.isdir(target_dir) and os.listdir(target_dir):
-        return
-
-    os.makedirs(target_dir, exist_ok=True)
-    for legacy_name in _LEGACY_APP_DATA_NAMES:
-        if legacy_name == STORE_NAME:
-            continue
-        legacy_dir = _legacy_app_data_dir(legacy_name)
-        if not os.path.isdir(legacy_dir):
-            continue
-        for item in os.listdir(legacy_dir):
-            src = os.path.join(legacy_dir, item)
-            dst = os.path.join(target_dir, item)
-            if not os.path.exists(dst):
-                shutil.copy2(src, dst)
-        return
-
-
 APP_DATA_DIR = _get_app_data_dir()
-_migrate_app_data_dir_if_needed(APP_DATA_DIR)
 os.makedirs(APP_DATA_DIR, exist_ok=True)
 
 DB_PATH = os.path.join(APP_DATA_DIR, STORE_DB_FILENAME)
@@ -69,257 +34,9 @@ def get_connection():
     return conn
 
 
-def _table_exists(conn, name):
-    row = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
-        (name,),
-    ).fetchone()
-    return row is not None
-
-
-def _get_schema_version(conn):
-    if not _table_exists(conn, "app_metadata"):
-        return None
-    row = conn.execute(
-        "SELECT value FROM app_metadata WHERE key = 'schema_version'"
-    ).fetchone()
-    if not row:
-        return None
-    try:
-        return int(row["value"])
-    except (TypeError, ValueError):
-        return None
-
-
-def _needs_schema_reset(conn):
-    if _table_exists(conn, "transactions") or _table_exists(conn, "transaction_items"):
-        return True
-    version = _get_schema_version(conn)
-    return version is None or version < SCHEMA_VERSION
-
-
-def _backup_database_if_exists():
-    if not os.path.isfile(DB_PATH):
-        return
-    backup_name = f"{STORE_DB_FILENAME}.backup-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    shutil.copy2(DB_PATH, os.path.join(APP_DATA_DIR, backup_name))
-
-
-def _drop_all_tables(conn):
-    """Drop every application table in FK-safe order."""
-    tables = [
-        "maintenance_schedules",
-        "invoice_items",
-        "estimate_items",
-        "invoices",
-        "estimates",
-        "transaction_items",
-        "transactions",
-        "user_roles",
-        "role_permissions",
-        "users",
-        "permissions",
-        "roles",
-        "clients",
-        "services",
-        "products",
-        "app_metadata",
-    ]
-    for table in tables:
-        conn.execute(f"DROP TABLE IF EXISTS {table}")
-
-
-def _create_schema(conn):
-    conn.executescript("""
-        CREATE TABLE products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            category TEXT NOT NULL DEFAULT 'CCTV',
-            buy_price REAL NOT NULL DEFAULT 0,
-            sell_price REAL NOT NULL DEFAULT 0,
-            stock_count INTEGER NOT NULL DEFAULT 0,
-            unit TEXT NOT NULL DEFAULT 'pcs',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE services (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT DEFAULT '',
-            rate REAL NOT NULL DEFAULT 0,
-            worker_cost REAL NOT NULL DEFAULT 0,
-            rate_type TEXT NOT NULL DEFAULT 'Flat Fee',
-            service_type TEXT NOT NULL DEFAULT 'Installation',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE clients (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            phone TEXT DEFAULT '',
-            email TEXT DEFAULT '',
-            address TEXT DEFAULT '',
-            location TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE estimates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id INTEGER,
-            date TEXT NOT NULL,
-            subtotal REAL NOT NULL DEFAULT 0,
-            total_amount REAL NOT NULL DEFAULT 0,
-            tax_enabled INTEGER NOT NULL DEFAULT 0,
-            tax_rate REAL NOT NULL DEFAULT 0,
-            tax_amount REAL NOT NULL DEFAULT 0,
-            discount_percent REAL NOT NULL DEFAULT 0,
-            discount_amount REAL NOT NULL DEFAULT 0,
-            notes TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (client_id) REFERENCES clients(id)
-        );
-
-        CREATE TABLE estimate_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            estimate_id INTEGER NOT NULL,
-            item_type TEXT NOT NULL DEFAULT 'product',
-            item_id INTEGER NOT NULL,
-            item_name TEXT NOT NULL,
-            description TEXT DEFAULT '',
-            quantity INTEGER NOT NULL DEFAULT 1,
-            unit_price REAL NOT NULL DEFAULT 0,
-            unit_cost REAL NOT NULL DEFAULT 0,
-            total_price REAL NOT NULL DEFAULT 0,
-            FOREIGN KEY (estimate_id) REFERENCES estimates(id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE invoices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id INTEGER,
-            date TEXT NOT NULL,
-            subtotal REAL NOT NULL DEFAULT 0,
-            total_amount REAL NOT NULL DEFAULT 0,
-            tax_enabled INTEGER NOT NULL DEFAULT 0,
-            tax_rate REAL NOT NULL DEFAULT 0,
-            tax_amount REAL NOT NULL DEFAULT 0,
-            discount_percent REAL NOT NULL DEFAULT 0,
-            discount_amount REAL NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'Pending',
-            source_estimate_id INTEGER,
-            notes TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (client_id) REFERENCES clients(id),
-            FOREIGN KEY (source_estimate_id) REFERENCES estimates(id)
-        );
-
-        CREATE TABLE invoice_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            invoice_id INTEGER NOT NULL,
-            item_type TEXT NOT NULL DEFAULT 'product',
-            item_id INTEGER NOT NULL,
-            item_name TEXT NOT NULL,
-            description TEXT DEFAULT '',
-            quantity INTEGER NOT NULL DEFAULT 1,
-            unit_price REAL NOT NULL DEFAULT 0,
-            unit_cost REAL NOT NULL DEFAULT 0,
-            total_price REAL NOT NULL DEFAULT 0,
-            FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE maintenance_schedules (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id INTEGER NOT NULL,
-            service_name TEXT NOT NULL,
-            frequency TEXT NOT NULL DEFAULT 'Monthly',
-            start_date TEXT NOT NULL,
-            next_due_date TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'Active',
-            notes TEXT DEFAULT '',
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
-        );
-
-        CREATE INDEX idx_estimates_date ON estimates(date);
-        CREATE INDEX idx_invoices_date ON invoices(date);
-        CREATE INDEX idx_invoices_status ON invoices(status);
-        CREATE INDEX idx_invoices_date_status ON invoices(date, status);
-        CREATE INDEX idx_invoices_source_estimate_id ON invoices(source_estimate_id);
-        CREATE INDEX idx_estimate_items_estimate_id ON estimate_items(estimate_id);
-        CREATE INDEX idx_invoice_items_invoice_id ON invoice_items(invoice_id);
-        CREATE INDEX idx_maintenance_schedules_client ON maintenance_schedules(client_id);
-        CREATE INDEX idx_maintenance_schedules_status ON maintenance_schedules(status);
-        CREATE INDEX idx_maintenance_schedules_due ON maintenance_schedules(next_due_date);
-
-        CREATE TABLE roles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            role_name TEXT NOT NULL UNIQUE
-        );
-
-        CREATE TABLE permissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            module_name TEXT NOT NULL UNIQUE
-        );
-
-        CREATE TABLE role_permissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            role_id INTEGER NOT NULL,
-            permission_id INTEGER NOT NULL,
-            FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
-            FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
-            UNIQUE(role_id, permission_id)
-        );
-
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_name TEXT NOT NULL DEFAULT '',
-            username TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            role_id INTEGER NOT NULL DEFAULT 0,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            must_change_password INTEGER NOT NULL DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE user_roles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            role_id INTEGER NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
-            UNIQUE(user_id, role_id)
-        );
-
-        CREATE TABLE app_metadata (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL DEFAULT ''
-        );
-    """)
-
-
-def _set_schema_version(conn):
-    conn.execute(
-        "INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('schema_version', ?)",
-        (str(SCHEMA_VERSION),),
-    )
-
-
 def initialize_database():
     conn = get_connection()
-    if _needs_schema_reset(conn):
-        conn.close()
-        _backup_database_if_exists()
-        conn = get_connection()
-        _drop_all_tables(conn)
-        _create_schema(conn)
-        _set_schema_version(conn)
-        conn.commit()
-        conn.close()
-        _seed_roles_and_permissions()
-        return
-
-    cursor = conn.cursor()
-    cursor.executescript("""
+    conn.executescript("""
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -429,17 +146,6 @@ def initialize_database():
             FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
         );
 
-        CREATE INDEX IF NOT EXISTS idx_estimates_date ON estimates(date);
-        CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(date);
-        CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
-        CREATE INDEX IF NOT EXISTS idx_invoices_date_status ON invoices(date, status);
-        CREATE INDEX IF NOT EXISTS idx_invoices_source_estimate_id ON invoices(source_estimate_id);
-        CREATE INDEX IF NOT EXISTS idx_estimate_items_estimate_id ON estimate_items(estimate_id);
-        CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items(invoice_id);
-        CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_client ON maintenance_schedules(client_id);
-        CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_status ON maintenance_schedules(status);
-        CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_due ON maintenance_schedules(next_due_date);
-
         CREATE TABLE IF NOT EXISTS roles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             role_name TEXT NOT NULL UNIQUE
@@ -464,6 +170,7 @@ def initialize_database():
             full_name TEXT NOT NULL DEFAULT '',
             username TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
+            phone TEXT NOT NULL DEFAULT '',
             role_id INTEGER NOT NULL DEFAULT 0,
             is_active INTEGER NOT NULL DEFAULT 1,
             must_change_password INTEGER NOT NULL DEFAULT 0,
@@ -483,7 +190,22 @@ def initialize_database():
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL DEFAULT ''
         );
+
+        CREATE INDEX IF NOT EXISTS idx_estimates_date ON estimates(date);
+        CREATE INDEX IF NOT EXISTS idx_invoices_date ON invoices(date);
+        CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+        CREATE INDEX IF NOT EXISTS idx_invoices_date_status ON invoices(date, status);
+        CREATE INDEX IF NOT EXISTS idx_invoices_source_estimate_id ON invoices(source_estimate_id);
+        CREATE INDEX IF NOT EXISTS idx_estimate_items_estimate_id ON estimate_items(estimate_id);
+        CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items(invoice_id);
+        CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_client ON maintenance_schedules(client_id);
+        CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_status ON maintenance_schedules(status);
+        CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_due ON maintenance_schedules(next_due_date);
     """)
+    conn.execute(
+        "INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('schema_version', ?)",
+        (str(SCHEMA_VERSION),),
+    )
     conn.commit()
     conn.close()
 

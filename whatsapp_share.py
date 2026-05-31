@@ -45,21 +45,23 @@ def reveal_file(path: str) -> None:
 
 def format_client_details(client: dict) -> str:
     """Format client record as a WhatsApp message."""
-    return "\n".join(
-        [
-            f"*{STORE_NAME} — Client Details*",
-            "",
-            f"*Name:* {client.get('name') or '—'}",
-            f"*Phone:* {client.get('phone') or '—'}",
-            f"*Email:* {client.get('email') or '—'}",
-            f"*Address:* {client.get('address') or '—'}",
-        ]
-    )
+    lines = [
+        f"*{STORE_NAME} — Client Details*",
+        "",
+        f"*Name:* {client.get('name') or '—'}",
+        f"*Phone:* {client.get('phone') or '—'}",
+        f"*Email:* {client.get('email') or '—'}",
+        f"*Address:* {client.get('address') or '—'}",
+    ]
+    location = (client.get("location") or "").strip()
+    if location:
+        lines.append(f"*Location:* {location}")
+    return "\n".join(lines)
 
 
-def share_client_via_whatsapp(client: dict) -> None:
-    """Share client details on WhatsApp, opening the client's chat when possible."""
-    open_whatsapp(format_client_details(client), client.get("phone"))
+def share_client_via_whatsapp(client: dict, target_phone: str) -> None:
+    """Share client details on WhatsApp to a system user's phone number."""
+    open_whatsapp(format_client_details(client), target_phone)
 
 
 def _transaction_doc_label(tx: dict) -> tuple[str, str]:

@@ -9,7 +9,7 @@ from country_phone_codes import (
     parse_phone,
 )
 from models import get_all_clients, add_client, update_client, delete_client, get_client
-from login_manager import CurrentUser
+from login_manager import CurrentUser, get_active_users_with_phone
 from whatsapp_share import share_client_via_whatsapp
 from ui_theme import (
     page_shell,
@@ -28,6 +28,9 @@ from ui_theme import (
     notify_success,
     INPUT,
     TEXT_LABEL,
+    TEXT_HEADING,
+    TEXT_BODY,
+    CARD,
 )
 
 
@@ -68,8 +71,27 @@ def render_clients():
                                 danger_button("Delete", on_click=lambda cid=c["id"]: del_client(cid))
 
     def _share_client(client):
-        share_client_via_whatsapp(client)
-        notify_success("Opening WhatsApp…")
+        system_users = get_active_users_with_phone()
+        if not system_users:
+            notify_warning("No system users have a phone number configured. Add phone numbers in User Management.")
+            return
+
+        with ui.dialog() as dialog, ui.card().classes(f"{CARD} p-4 min-w-[320px]"):
+            ui.label("Send Client Details via WhatsApp").classes(TEXT_HEADING)
+            ui.label(f"Select a team member to receive details of {client['name']}:").classes(TEXT_BODY)
+            with ui.column().classes("w-full gap-2 mt-3 max-h-64 overflow-y-auto"):
+                for su in system_users:
+                    label = f"{su['display_name']} ({su['roles']})"
+
+                    def on_select(d=dialog, phone=su["phone"], c=client):
+                        d.close()
+                        share_client_via_whatsapp(c, phone)
+                        notify_success("Opening WhatsApp…")
+
+                    ghost_button(label, on_click=on_select)
+            with ui.row().classes("w-full justify-end mt-3"):
+                ghost_button("Cancel", on_click=dialog.close)
+        dialog.open()
 
     def show_empty_form():
         state["editing_id"] = None
