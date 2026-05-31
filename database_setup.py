@@ -272,64 +272,6 @@ def _seed_roles_and_permissions():
     conn.close()
 
 
-def seed_sample_data():
-    """Insert sample data for demonstration purposes."""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT COUNT(*) FROM products")
-    if cursor.fetchone()[0] > 0:
-        conn.close()
-        return
-
-    products = [
-        ("Hikvision 2MP Bullet Camera", "CCTV", 45.00, 89.99, 25, "pcs"),
-        ("Dahua 4MP Dome Camera", "CCTV", 65.00, 129.99, 18, "pcs"),
-        ("Hikvision 8-Channel NVR", "CCTV", 120.00, 249.99, 10, "pcs"),
-        ("Cat6 Network Cable", "Accessories", 0.30, 0.75, 500, "meters"),
-        ("Epson EB-E01 Projector", "Projector", 280.00, 499.99, 8, "pcs"),
-        ("BenQ MH560 Projector", "Projector", 350.00, 599.99, 5, "pcs"),
-        ("Projector Ceiling Mount", "Accessories", 15.00, 35.99, 20, "pcs"),
-        ("100\" Motorized Screen", "Accessories", 85.00, 179.99, 7, "pcs"),
-        ("1TB Surveillance HDD", "CCTV", 35.00, 69.99, 15, "pcs"),
-        ("PoE Network Switch 8-Port", "Accessories", 25.00, 54.99, 12, "pcs"),
-    ]
-
-    services = [
-        ("CCTV Installation - Basic", "Up to 4 cameras, standard wiring", 150.00, 80.00, "Flat Fee", "Installation"),
-        ("CCTV Installation - Advanced", "Up to 8 cameras, concealed wiring", 300.00, 160.00, "Flat Fee", "Installation"),
-        ("Projector Installation", "Ceiling mount, cable routing, calibration", 120.00, 65.00, "Flat Fee", "Installation"),
-        ("Network Cabling", "Per-hour structured cabling service", 45.00, 25.00, "Hourly Rate", "Installation"),
-        ("CCTV Maintenance - Monthly", "Monthly inspection and cleaning", 80.00, 40.00, "Flat Fee", "Maintenance"),
-        ("CCTV Maintenance - Quarterly", "Quarterly full system check", 200.00, 100.00, "Flat Fee", "Maintenance"),
-        ("Projector Maintenance", "Lamp check, filter cleaning, alignment", 60.00, 30.00, "Flat Fee", "Maintenance"),
-        ("Emergency Repair", "On-site emergency troubleshooting", 75.00, 40.00, "Hourly Rate", "Maintenance"),
-    ]
-
-    clients = [
-        ("Acme Corporation", "+65 9123 4567", "contact@acme.sg", "123 Orchard Road, Singapore 238858", ""),
-        ("Bright Office Pte Ltd", "+65 8234 5678", "admin@brightoffice.com", "456 Raffles Place, Singapore 048623", ""),
-        ("City Mall Management", "+65 7345 6789", "ops@citymall.sg", "789 Jurong East St 21, Singapore 609602", ""),
-    ]
-
-    cursor.executemany(
-        "INSERT INTO products (name, category, buy_price, sell_price, stock_count, unit) VALUES (?,?,?,?,?,?)",
-        products,
-    )
-    cursor.executemany(
-        "INSERT INTO services (name, description, rate, worker_cost, rate_type, service_type) VALUES (?,?,?,?,?,?)",
-        services,
-    )
-    cursor.executemany(
-        "INSERT INTO clients (name, phone, email, address, location) VALUES (?,?,?,?,?)",
-        clients,
-    )
-
-    conn.commit()
-    conn.close()
-
-
 if __name__ == "__main__":
     initialize_database()
-    seed_sample_data()
     print(f"Database initialized at: {DB_PATH}")

@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nicegui import app, ui
 from nicegui.helpers.network import format_url
 
-from database_setup import initialize_database, seed_sample_data
+from database_setup import initialize_database
 from login_manager import bootstrap_admin, CurrentUser
 from pdf_generator import OUTPUT_DIR
 from store_config import STORE_GSTIN, STORE_NAME, STORE_PHONE_DISPLAY, STORE_STORAGE_SECRET
@@ -43,7 +43,6 @@ from views.user_management import render_user_management
 from views.change_password import render_change_password
 
 initialize_database()
-seed_sample_data()
 bootstrap_admin()
 
 NAV_PERMISSIONS = {

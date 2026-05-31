@@ -185,7 +185,6 @@ New screens should match existing views (`clients.py`, `products.py`) — same p
 - No automated test suite today. Manual smoke path: login → create client → quote → PDF → convert to invoice → verify stock.
 - After schema changes, test against a **copy** of `megaa_electronics.db` in app data.
 - Do not commit: `__pycache__/`, `exports/*.pdf`, local `.db` files, `.DS_Store`.
-- `seed_sample_data()` only runs when `products` is empty — safe for dev, not for production data resets.
 
 ---
 
