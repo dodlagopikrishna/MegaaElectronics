@@ -6,12 +6,13 @@ import time
 from nicegui import ui
 
 from models import (
-    get_all_transactions,
-    get_transaction,
-    get_transaction_items,
-    create_transaction,
-    update_transaction_status,
-    delete_transaction,
+    get_invoices,
+    count_invoices,
+    get_invoice,
+    get_invoice_items,
+    create_invoice,
+    update_invoice_status,
+    delete_invoice,
     decrement_stock,
 )
 from pdf_generator import generate_transaction_pdf
@@ -34,10 +35,12 @@ from ui_theme import (
 )
 from views.transaction_builder import build_transaction_form
 
+PAGE_SIZE = 50
+
 
 def render_invoices():
     user = CurrentUser.get()
-    state = {"search": ""}
+    state = {"search": "", "page": 0, "sort": "number_desc"}
     list_panel = detail_panel = None
 
     def show_empty_detail():
@@ -47,7 +50,16 @@ def render_invoices():
 
     def refresh_list():
         list_panel.clear()
-        invoices = get_all_transactions(state["search"], tx_type="Invoice")
+        total = count_invoices(state["search"])
+        total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+        if state["page"] >= total_pages:
+            state["page"] = max(0, total_pages - 1)
+        offset = state["page"] * PAGE_SIZE
+        invoices = get_invoices(state["search"], limit=PAGE_SIZE, offset=offset)
+        if state["sort"] == "status_pending":
+            invoices = sorted(invoices, key=lambda x: (0 if x["status"] == "Pending" else 1, -x["id"]))
+        else:
+            invoices = sorted(invoices, key=lambda x: -x["id"])
         can_delete = user.has_permission("Invoices_Delete")
         can_export = user.has_permission("Export_PDF")
 
@@ -73,19 +85,36 @@ def render_invoices():
                             ghost_button("Export PDF", on_click=lambda e=iid: export_pdf(e))
                         if inv["status"] == "Pending":
                             success_button("Mark as Paid", on_click=lambda e=iid: mark_paid(e))
+                        elif inv["status"] == "Paid":
+                            ghost_button("Mark as UnPaid", on_click=lambda e=iid: mark_unpaid(e))
                         if can_delete:
                             danger_button("Delete", on_click=lambda e=iid: del_invoice(e))
+            if total_pages > 1:
+                with ui.row().classes("w-full justify-center items-center gap-3 mt-2"):
+                    if state["page"] > 0:
+                        ghost_button(
+                            "Prev",
+                            on_click=lambda: (state.update(page=state["page"] - 1), refresh_list()),
+                        )
+                    ui.label(f"Page {state['page'] + 1} of {total_pages} ({total} total)").classes(
+                        "text-sm text-gray-500"
+                    )
+                    if state["page"] < total_pages - 1:
+                        ghost_button(
+                            "Next",
+                            on_click=lambda: (state.update(page=state["page"] + 1), refresh_list()),
+                        )
 
     def save_invoice(**kwargs):
-        tx_id = create_transaction(
+        inv_id = create_invoice(
             client_id=kwargs["client_id"],
             total_amount=kwargs["total"],
             subtotal=kwargs["subtotal"],
+            tax_enabled=kwargs["tax_enabled"],
             tax_rate=kwargs["tax_rate"],
             tax_amount=kwargs["tax_amount"],
             discount_percent=kwargs["discount_percent"],
             discount_amount=kwargs["discount_amount"],
-            tx_type="Invoice",
             status="Pending",
             notes=kwargs["notes"],
             items=kwargs["line_items"],
@@ -93,7 +122,7 @@ def render_invoices():
         for item in kwargs["line_items"]:
             if item["item_type"] == "product":
                 decrement_stock(item["item_id"], item["quantity"])
-        notify_success(f"Invoice INV-{tx_id:04d} created!")
+        notify_success(f"Invoice INV-{inv_id:04d} created!")
         refresh_list()
         show_empty_detail()
 
@@ -106,9 +135,15 @@ def render_invoices():
             on_cancel=show_empty_detail,
         )
 
+    def _tax_lines(tx):
+        lines = []
+        if tx.get("tax_enabled") or tx.get("tax_rate", 0) > 0:
+            lines.append((f"GST ({tx['tax_rate']}%)", f"₹{tx['tax_amount']:,.2f}"))
+        return lines
+
     def view_invoice(inv_id):
-        tx = get_transaction(inv_id)
-        items = get_transaction_items(inv_id)
+        tx = get_invoice(inv_id)
+        items = get_invoice_items(inv_id)
         if not tx:
             return
         detail_panel.clear()
@@ -132,32 +167,24 @@ def render_invoices():
                         lines.append(
                             (f"Discount ({tx['discount_percent']}%)", f"-₹{tx['discount_amount']:,.2f}")
                         )
-                    if tx.get("tax_rate", 0) > 0:
-                        lines.append((f"GST ({tx['tax_rate']}%)", f"₹{tx['tax_amount']:,.2f}"))
+                    lines.extend(_tax_lines(tx))
                     lines.append(("Total", f"₹{tx['total_amount']:,.2f}"))
                     for lbl, val in lines:
                         with ui.row().classes("w-full justify-between"):
                             ui.label(lbl).classes("font-bold" if lbl == "Total" else "")
                             ui.label(val).classes("font-bold" if lbl == "Total" else "")
                 with ui.row().classes("gap-2"):
-                    ghost_button(
-                        "View PDF",
-                        on_click=lambda: view_pdf(inv_id, on_back=lambda: view_invoice(inv_id)),
-                    )
-                    if user.has_permission("Export_PDF"):
-                        ghost_button("Export PDF", on_click=lambda: export_pdf(inv_id))
-                    if tx["status"] == "Pending":
-                        success_button("Mark as Paid", on_click=lambda: mark_paid(inv_id))
                     ghost_button("Back", on_click=show_empty_detail)
 
     def view_pdf(inv_id, *, on_back=None):
-        tx = get_transaction(inv_id)
-        items = get_transaction_items(inv_id)
+        tx = get_invoice(inv_id)
+        items = get_invoice_items(inv_id)
         if not tx or not items:
             return
         path = generate_transaction_pdf(tx, items)
         filename = os.path.basename(path)
         pdf_url = f"/exports/{filename}?t={int(time.time())}"
+
         def send_whatsapp():
             share_transaction_pdf_via_whatsapp(tx, items)
             notify_success("Opening WhatsApp…")
@@ -172,8 +199,8 @@ def render_invoices():
         )
 
     def export_pdf(inv_id):
-        tx = get_transaction(inv_id)
-        items = get_transaction_items(inv_id)
+        tx = get_invoice(inv_id)
+        items = get_invoice_items(inv_id)
         if tx and items:
             path = generate_transaction_pdf(tx, items)
             notify_success(f"PDF saved to: {path}")
@@ -183,14 +210,26 @@ def render_invoices():
                 os.startfile(path)
 
     def mark_paid(inv_id):
-        update_transaction_status(inv_id, "Paid")
-        notify_success("Marked as Paid.")
-        refresh_list()
-        show_empty_detail()
+        def do_mark_paid():
+            update_invoice_status(inv_id, "Paid")
+            notify_success("Marked as Paid.")
+            refresh_list()
+            show_empty_detail()
+
+        confirm_dialog("Mark as Paid", "Mark this invoice as paid?", do_mark_paid)
+
+    def mark_unpaid(inv_id):
+        def do_mark_unpaid():
+            update_invoice_status(inv_id, "Pending")
+            notify_success("Marked as UnPaid.")
+            refresh_list()
+            show_empty_detail()
+
+        confirm_dialog("Mark as UnPaid", "Mark this invoice as unpaid?", do_mark_unpaid)
 
     def del_invoice(inv_id):
         def do_delete():
-            delete_transaction(inv_id)
+            delete_invoice(inv_id)
             notify_success("Deleted.")
             refresh_list()
             show_empty_detail()
@@ -202,11 +241,26 @@ def render_invoices():
         search = ui.input(placeholder="Search invoices...").props("outlined dense").classes(
             f"{INPUT} shrink-0"
         )
-        search.on_value_change(lambda e: (state.update(search=e.value or ""), refresh_list()))
+        search.on_value_change(
+            lambda e: (state.update(search=e.value or "", page=0), refresh_list())
+        )
         if user.has_permission("Invoices_Create"):
             toolbar(search, add_label="Direct Invoice", on_add=show_builder)
         else:
             toolbar(search)
+
+        sort_options = {
+            "number_desc": "Invoice # (Newest First)",
+            "status_pending": "Payment Status (Pending First)",
+        }
+        with ui.row().classes("w-full items-center gap-2 mb-2"):
+            ui.label("Sort by:").classes("text-sm text-gray-600")
+            ui.select(
+                options=sort_options,
+                value="number_desc",
+                on_change=lambda e: (state.update(sort=e.value), refresh_list()),
+            ).props("outlined dense").classes("min-w-[220px]")
+
         list_panel, detail_panel = split_panels()
         refresh_list()
         show_empty_detail()

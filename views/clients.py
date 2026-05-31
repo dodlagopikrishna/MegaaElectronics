@@ -52,7 +52,11 @@ def render_clients():
                         with ui.column().classes("gap-0"):
                             ui.label(c["name"]).classes("font-semibold")
                             addr = (c.get("address") or "").strip() or "—"
-                            ui.label(f"{c['phone']} · {addr}").classes("text-sm text-gray-500")
+                            loc = (c.get("location") or "").strip()
+                            detail = f"{c['phone']} · {addr}"
+                            if loc:
+                                detail += " · Map link"
+                            ui.label(detail).classes("text-sm text-gray-500")
                         with ui.row().classes("gap-2"):
                             ghost_button(
                                 "WhatsApp",
@@ -94,6 +98,7 @@ def render_clients():
                     )
                 email = labeled_input("Email")
                 address = labeled_textarea("Address")
+                location = labeled_input("Location (Google Maps URL)")
                 if data:
                     name.value = data["name"]
                     code, number = parse_phone(data.get("phone", ""))
@@ -101,6 +106,7 @@ def render_clients():
                     phone_number.value = number
                     email.value = data.get("email", "")
                     address.value = data.get("address", "")
+                    location.value = data.get("location", "")
 
                 def save():
                     n = (name.value or "").strip()
@@ -113,35 +119,18 @@ def render_clients():
                     )
                     em = (email.value or "").strip()
                     ad = (address.value or "").strip()
+                    loc = (location.value or "").strip()
                     if state["editing_id"]:
-                        update_client(state["editing_id"], n, ph, em, ad)
+                        update_client(state["editing_id"], n, ph, em, ad, loc)
                     else:
-                        add_client(n, ph, em, ad)
+                        add_client(n, ph, em, ad, loc)
                     notify_success("Client saved.")
                     refresh_table()
                     show_empty_form()
 
-                def share_current():
-                    n = (name.value or "").strip()
-                    if not n:
-                        notify_warning("Enter a client name to share.")
-                        return
-                    share_client_via_whatsapp(
-                        {
-                            "name": n,
-                            "phone": format_phone(
-                                dial_code_from_selection(phone_code.value),
-                                phone_number.value,
-                            ),
-                            "email": (email.value or "").strip(),
-                            "address": (address.value or "").strip(),
-                        }
-                    )
-                    notify_success("Opening WhatsApp…")
 
                 with form_actions_row():
                     success_button("Save", on_click=save)
-                    ghost_button("WhatsApp", on_click=share_current)
                     ghost_button("Cancel", on_click=show_empty_form)
 
     def edit_client(client_id):

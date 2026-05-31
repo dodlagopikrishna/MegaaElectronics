@@ -16,7 +16,7 @@ from ui_theme import (
     APP_BODY,
     APP_FOOTER,
     MAIN_PANE,
-    MAIN_SCROLL,
+    MAIN_VIEW_HOST,
     MAIN_VIEW_SHELL,
     SIDEBAR,
     SIDEBAR_HEADER,
@@ -38,6 +38,7 @@ from views.products import render_products
 from views.clients import render_clients
 from views.quotes import render_quotes
 from views.invoices import render_invoices
+from views.maintenance import render_maintenance
 from views.user_management import render_user_management
 from views.change_password import render_change_password
 
@@ -51,6 +52,7 @@ NAV_PERMISSIONS = {
     "clients": "Clients_View",
     "quotes": "Quotes_View",
     "invoices": "Invoices_View",
+    "maintenance": "Maintenance_View",
     "users": "User_Management",
 }
 
@@ -60,6 +62,7 @@ NAV_LABELS = {
     "clients": "Clients",
     "quotes": "Quotes",
     "invoices": "Invoices",
+    "maintenance": "Maintenance Schedule",
     "users": "User Management",
 }
 
@@ -69,6 +72,7 @@ NAV_ICONS = {
     "clients": "people",
     "quotes": "request_quote",
     "invoices": "receipt_long",
+    "maintenance": "build_circle",
     "users": "manage_accounts",
 }
 
@@ -78,6 +82,7 @@ VIEW_RENDERERS = {
     "clients": render_clients,
     "quotes": render_quotes,
     "invoices": render_invoices,
+    "maintenance": render_maintenance,
     "users": render_user_management,
     "change_password": render_change_password,
 }
@@ -93,7 +98,7 @@ def _is_authenticated():
 
 def _allowed_views():
     current = CurrentUser.get()
-    order = ["dashboard", "products", "clients", "quotes", "invoices", "users"]
+    order = ["dashboard", "products", "clients", "quotes", "invoices", "maintenance", "users"]
     return [k for k in order if current.has_permission(NAV_PERMISSIONS[k])]
 
 
@@ -198,10 +203,10 @@ def home_page():
                 )
 
         with ui.column().classes(MAIN_PANE):
-            main_slot = ui.column().classes(MAIN_SCROLL)
+            main_slot = ui.column().classes(MAIN_VIEW_HOST)
             show_view(state["view"])
 
-    with ui.footer().classes(APP_FOOTER):
+    with ui.footer(fixed=False).classes(APP_FOOTER):
         ui.label(f"{STORE_NAME}  |  Tel: {STORE_PHONE_DISPLAY}  |  GSTIN: {STORE_GSTIN}")
         ui.label("Retail Management System v1.0.0")
 

@@ -193,6 +193,11 @@ def generate_transaction_pdf(transaction, items, save_path=None):
     pdf.alias_nb_pages()
     pdf.add_page()
 
+    items = sorted(
+        items,
+        key=lambda x: (0 if x.get("item_type") == "product" else 1, (x.get("item_name") or "").lower()),
+    )
+
     doc_date = _format_date(transaction.get("date"))
     status = transaction.get("status", "Pending")
 
@@ -305,16 +310,6 @@ def generate_transaction_pdf(transaction, items, save_path=None):
         )
         pdf.ln()
 
-        if item.get("maintenance_schedule"):
-            pdf.set_font("Helvetica", "I", 8)
-            pdf.set_text_color(120, 120, 120)
-            pdf.set_x(MARGIN)
-            pdf.cell(col_widths[0], 5, "")
-            pdf.cell(table_width - col_widths[0], 5, f"Maintenance: {item['maintenance_schedule']}", border="B")
-            pdf.ln()
-            pdf.set_font("Helvetica", "", 9)
-            pdf.set_text_color(*MEGAAPdf.DARK_TEXT)
-
         row_fill = not row_fill
 
     pdf.ln(4)
@@ -335,7 +330,7 @@ def generate_transaction_pdf(transaction, items, save_path=None):
         pdf.cell(val_x - totals_x - 30, 6, f"Discount ({transaction['discount_percent']}%):")
         pdf.cell(30, 6, f"-Rs.{transaction.get('discount_amount', 0):,.2f}", align="R", ln=True)
 
-    if transaction.get("tax_rate", 0) > 0:
+    if transaction.get("tax_enabled") or transaction.get("tax_rate", 0) > 0:
         pdf.set_xy(totals_x, pdf.get_y())
         pdf.cell(val_x - totals_x - 30, 6, f"GST ({transaction['tax_rate']}%):")
         pdf.cell(30, 6, f"Rs.{transaction.get('tax_amount', 0):,.2f}", align="R", ln=True)

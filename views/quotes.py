@@ -6,12 +6,13 @@ import time
 from nicegui import ui
 
 from models import (
-    get_all_transactions,
-    get_transaction,
-    get_transaction_items,
-    create_transaction,
-    update_transaction,
-    delete_transaction,
+    get_estimates,
+    count_estimates,
+    get_estimate,
+    get_estimate_items,
+    create_estimate,
+    update_estimate,
+    delete_estimate,
     convert_estimate_to_invoice,
 )
 from pdf_generator import generate_transaction_pdf
@@ -34,10 +35,12 @@ from ui_theme import (
 )
 from views.transaction_builder import build_transaction_form
 
+PAGE_SIZE = 50
+
 
 def render_quotes():
     user = CurrentUser.get()
-    state = {"search": ""}
+    state = {"search": "", "page": 0}
     list_panel = detail_panel = None
 
     def show_empty_detail():
@@ -47,7 +50,12 @@ def render_quotes():
 
     def refresh_list():
         list_panel.clear()
-        estimates = get_all_transactions(state["search"], tx_type="Estimate")
+        total = count_estimates(state["search"])
+        total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+        if state["page"] >= total_pages:
+            state["page"] = max(0, total_pages - 1)
+        offset = state["page"] * PAGE_SIZE
+        estimates = get_estimates(state["search"], limit=PAGE_SIZE, offset=offset)
         can_edit = user.has_permission("Quotes_Create")
         can_delete = user.has_permission("Quotes_Delete")
         can_export = user.has_permission("Export_PDF")
@@ -76,44 +84,48 @@ def render_quotes():
                         ghost_button("Convert to Invoice", on_click=lambda e=eid: to_invoice(e))
                         if can_delete:
                             danger_button("Delete", on_click=lambda e=eid: del_estimate(e))
+            if total_pages > 1:
+                with ui.row().classes("w-full justify-center items-center gap-3 mt-2"):
+                    if state["page"] > 0:
+                        ghost_button(
+                            "Prev",
+                            on_click=lambda: (state.update(page=state["page"] - 1), refresh_list()),
+                        )
+                    ui.label(f"Page {state['page'] + 1} of {total_pages} ({total} total)").classes(
+                        "text-sm text-gray-500"
+                    )
+                    if state["page"] < total_pages - 1:
+                        ghost_button(
+                            "Next",
+                            on_click=lambda: (state.update(page=state["page"] + 1), refresh_list()),
+                        )
 
     def save_estimate(**kwargs):
-        edit_id = kwargs.pop("tx_id", None)
+        edit_id = kwargs.pop("doc_id", None)
+        common = dict(
+            client_id=kwargs["client_id"],
+            total_amount=kwargs["total"],
+            subtotal=kwargs["subtotal"],
+            tax_enabled=kwargs["tax_enabled"],
+            tax_rate=kwargs["tax_rate"],
+            tax_amount=kwargs["tax_amount"],
+            discount_percent=kwargs["discount_percent"],
+            discount_amount=kwargs["discount_amount"],
+            notes=kwargs["notes"],
+            items=kwargs["line_items"],
+        )
         if edit_id:
-            updated = update_transaction(
-                tx_id=edit_id,
-                client_id=kwargs["client_id"],
-                total_amount=kwargs["total"],
-                subtotal=kwargs["subtotal"],
-                tax_rate=kwargs["tax_rate"],
-                tax_amount=kwargs["tax_amount"],
-                discount_percent=kwargs["discount_percent"],
-                discount_amount=kwargs["discount_amount"],
-                notes=kwargs["notes"],
-                items=kwargs["line_items"],
-            )
+            updated = update_estimate(estimate_id=edit_id, **common)
             if not updated:
-                notify_error("Could not update estimate. It may have been converted or deleted.")
+                notify_error("Could not update estimate. It may have been deleted.")
                 return
             notify_success(f"Estimate EST-{edit_id:04d} updated!")
             refresh_list()
             view_estimate(edit_id)
             return
 
-        tx_id = create_transaction(
-            client_id=kwargs["client_id"],
-            total_amount=kwargs["total"],
-            subtotal=kwargs["subtotal"],
-            tax_rate=kwargs["tax_rate"],
-            tax_amount=kwargs["tax_amount"],
-            discount_percent=kwargs["discount_percent"],
-            discount_amount=kwargs["discount_amount"],
-            tx_type="Estimate",
-            status="Pending",
-            notes=kwargs["notes"],
-            items=kwargs["line_items"],
-        )
-        notify_success(f"Estimate EST-{tx_id:04d} saved!")
+        est_id = create_estimate(**common)
+        notify_success(f"Estimate EST-{est_id:04d} saved!")
         refresh_list()
         show_empty_detail()
 
@@ -127,9 +139,9 @@ def render_quotes():
         )
 
     def show_edit_builder(est_id):
-        tx = get_transaction(est_id)
-        items = get_transaction_items(est_id)
-        if not tx or tx["type"] != "Estimate":
+        tx = get_estimate(est_id)
+        items = get_estimate_items(est_id)
+        if not tx:
             return
         build_transaction_form(
             detail_panel,
@@ -137,14 +149,20 @@ def render_quotes():
             save_label="Update Estimate",
             on_save=save_estimate,
             on_cancel=lambda: view_estimate(est_id),
-            tx_id=est_id,
+            doc_id=est_id,
             initial_transaction=tx,
             initial_items=items,
         )
 
+    def _tax_lines(tx):
+        lines = []
+        if tx.get("tax_enabled") or tx.get("tax_rate", 0) > 0:
+            lines.append((f"GST ({tx['tax_rate']}%)", f"₹{tx['tax_amount']:,.2f}"))
+        return lines
+
     def view_estimate(est_id):
-        tx = get_transaction(est_id)
-        items = get_transaction_items(est_id)
+        tx = get_estimate(est_id)
+        items = get_estimate_items(est_id)
         if not tx:
             return
         detail_panel.clear()
@@ -160,18 +178,13 @@ def render_quotes():
                         with ui.row().classes("w-full justify-between"):
                             ui.label(f"{tag} {item['item_name']} ×{item['quantity']}")
                             ui.label(f"₹{item['total_price']:,.2f}").classes("font-semibold")
-                        if item.get("maintenance_schedule"):
-                            ui.label(f"Maint: {item['maintenance_schedule']}").classes(
-                                "text-xs text-blue-500"
-                            )
                 with card():
                     lines = [("Subtotal", f"₹{tx['subtotal']:,.2f}")]
                     if tx.get("discount_percent", 0) > 0:
                         lines.append(
                             (f"Discount ({tx['discount_percent']}%)", f"-₹{tx['discount_amount']:,.2f}")
                         )
-                    if tx.get("tax_rate", 0) > 0:
-                        lines.append((f"GST ({tx['tax_rate']}%)", f"₹{tx['tax_amount']:,.2f}"))
+                    lines.extend(_tax_lines(tx))
                     lines.append(("Total", f"₹{tx['total_amount']:,.2f}"))
                     for lbl, val in lines:
                         with ui.row().classes("w-full justify-between"):
@@ -180,25 +193,17 @@ def render_quotes():
                 if tx.get("notes"):
                     ui.label(f"Notes: {tx['notes']}").classes("text-sm text-gray-500")
                 with ui.row().classes("gap-2"):
-                    if user.has_permission("Quotes_Create"):
-                        ghost_button("Edit", on_click=lambda: show_edit_builder(est_id))
-                    ghost_button(
-                        "View PDF",
-                        on_click=lambda: view_pdf(est_id, on_back=lambda: view_estimate(est_id)),
-                    )
-                    if user.has_permission("Export_PDF"):
-                        ghost_button("Export PDF", on_click=lambda: export_pdf(est_id))
-                    ghost_button("Convert to Invoice", on_click=lambda: to_invoice(est_id))
                     ghost_button("Back", on_click=show_empty_detail)
 
     def view_pdf(est_id, *, on_back=None):
-        tx = get_transaction(est_id)
-        items = get_transaction_items(est_id)
+        tx = get_estimate(est_id)
+        items = get_estimate_items(est_id)
         if not tx or not items:
             return
         path = generate_transaction_pdf(tx, items)
         filename = os.path.basename(path)
         pdf_url = f"/exports/{filename}?t={int(time.time())}"
+
         def send_whatsapp():
             share_transaction_pdf_via_whatsapp(tx, items)
             notify_success("Opening WhatsApp…")
@@ -213,8 +218,8 @@ def render_quotes():
         )
 
     def export_pdf(est_id):
-        tx = get_transaction(est_id)
-        items = get_transaction_items(est_id)
+        tx = get_estimate(est_id)
+        items = get_estimate_items(est_id)
         if tx and items:
             path = generate_transaction_pdf(tx, items)
             notify_success(f"PDF saved to: {path}")
@@ -225,20 +230,23 @@ def render_quotes():
 
     def to_invoice(est_id):
         def do_convert():
-            convert_estimate_to_invoice(est_id)
-            notify_success("Estimate converted to Invoice.")
+            inv_id = convert_estimate_to_invoice(est_id)
+            if inv_id:
+                notify_success(f"Estimate converted to Invoice INV-{inv_id:04d}.")
+            else:
+                notify_error("Could not convert estimate.")
             refresh_list()
             show_empty_detail()
 
         confirm_dialog(
             "Convert",
-            "Convert this estimate to an invoice? This will decrement stock for products.",
+            "Convert this estimate to an invoice? It will be removed from the Quotes list and stock will be decremented.",
             do_convert,
         )
 
     def del_estimate(est_id):
         def do_delete():
-            delete_transaction(est_id)
+            delete_estimate(est_id)
             notify_success("Deleted.")
             refresh_list()
             show_empty_detail()
@@ -250,7 +258,9 @@ def render_quotes():
         search = ui.input(placeholder="Search estimates...").props("outlined dense").classes(
             f"{INPUT} shrink-0"
         )
-        search.on_value_change(lambda e: (state.update(search=e.value or ""), refresh_list()))
+        search.on_value_change(
+            lambda e: (state.update(search=e.value or "", page=0), refresh_list())
+        )
         if user.has_permission("Quotes_Create"):
             toolbar(search, add_label="New Estimate", on_add=show_builder)
         else:

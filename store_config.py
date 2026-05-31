@@ -18,3 +18,4 @@ STORE_ADDRESS = (
     "Mini Bypass Road, Nellore - 524001"
 )
 STORE_CITY = "Nellore - 524001"
+DEFAULT_GST_RATE = 9.0

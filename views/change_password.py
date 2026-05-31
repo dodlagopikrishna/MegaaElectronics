@@ -20,7 +20,7 @@ def render_change_password():
 
     with content:
         list_panel, detail_panel = split_panels(
-            list_weight="lg:col-span-4", detail_weight="lg:col-span-8"
+            list_cols="lg:col-span-4", detail_cols="lg:col-span-8"
         )
 
         with list_panel:

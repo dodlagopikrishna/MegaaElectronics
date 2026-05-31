@@ -56,21 +56,24 @@ def render_products():
                     stock_cls = "text-red-500" if item["stock_count"] <= 5 else ""
                     lines = [
                         item["category"],
-                        f"₹{item['retail_price']:.2f}",
+                        f"Sell: ₹{item['sell_price']:.2f}",
                         f"Stock: {item['stock_count']} {item['unit']}",
                     ]
                     if show_cost:
-                        lines.insert(1, f"Cost: ₹{item['cost_price']:.2f}")
+                        lines.insert(1, f"Buy: ₹{item['buy_price']:.2f}")
                     _item_card(item["name"], lines, stock_cls, item["id"], can_edit, can_delete, "product")
             else:
                 items = get_all_services(search)
+                show_cost = user.has_permission("Cost_Prices")
                 can_edit = user.has_permission("Services_Edit")
                 can_delete = user.has_permission("Services_Delete")
                 if not items:
                     empty_state("No services found.")
                     return
                 for item in items:
-                    lines = [item["service_type"], f"₹{item['rate']:.2f}", item["rate_type"]]
+                    lines = [item["service_type"], f"Charge: ₹{item['rate']:.2f}", item["rate_type"]]
+                    if show_cost:
+                        lines.insert(1, f"Worker: ₹{item.get('worker_cost', 0):.2f}")
                     _item_card(item["name"], lines, "", item["id"], can_edit, can_delete, "service")
 
     def _item_card(name, lines, extra_cls, item_id, can_edit, can_delete, kind):
@@ -103,16 +106,16 @@ def render_products():
                 category = labeled_select(
                     "Category", ["CCTV", "Projector", "Accessories", "Other"]
                 )
-                cost = labeled_input("Cost Price (₹)") if show_cost else None
-                retail = labeled_input("Retail Price (₹)")
+                cost = labeled_input("Buy Price (₹)") if show_cost else None
+                retail = labeled_input("Sell Price (₹)")
                 stock = labeled_input("Stock Quantity")
                 unit = labeled_select("Unit", ["pcs", "meters", "sets", "rolls"])
                 if data:
                     name.value = data["name"]
                     category.value = data["category"]
                     if cost:
-                        cost.value = str(data["cost_price"])
-                    retail.value = str(data["retail_price"])
+                        cost.value = str(data["buy_price"])
+                    retail.value = str(data["sell_price"])
                     stock.value = str(data["stock_count"])
                     unit.value = data["unit"]
 
@@ -129,7 +132,7 @@ def render_products():
                             if not cost:
                                 existing = get_product(state["editing_id"])
                                 if existing:
-                                    c = existing["cost_price"]
+                                    c = existing["buy_price"]
                             update_product(
                                 state["editing_id"], n, category.value, c, r, s, unit.value
                             )
@@ -147,19 +150,23 @@ def render_products():
 
     def show_service_form(data=None):
         state["editing_id"] = data["id"] if data else None
+        show_cost = user.has_permission("Cost_Prices")
         detail_panel.clear()
         with detail_panel:
             with card():
                 ui.label("Edit Service" if data else "Add Service").classes("text-lg font-bold mb-3")
                 name = labeled_input("Name")
                 desc = labeled_input("Description")
-                rate = labeled_input("Rate (₹)")
+                rate = labeled_input("Charge Rate (₹)")
+                worker = labeled_input("Worker Cost (₹)") if show_cost else None
                 rate_type = labeled_select("Rate Type", ["Flat Fee", "Hourly Rate"])
                 svc_type = labeled_select("Service Type", ["Installation", "Maintenance"])
                 if data:
                     name.value = data["name"]
                     desc.value = data.get("description", "")
                     rate.value = str(data["rate"])
+                    if worker:
+                        worker.value = str(data.get("worker_cost", 0))
                     rate_type.value = data["rate_type"]
                     svc_type.value = data["service_type"]
 
@@ -169,12 +176,18 @@ def render_products():
                         if not n:
                             notify_warning("Service name is required.")
                             return
+                        wc = float(worker.value or 0) if worker else 0
+                        if state["editing_id"] and not worker:
+                            existing = get_service(state["editing_id"])
+                            if existing:
+                                wc = existing.get("worker_cost", 0)
                         if state["editing_id"]:
                             update_service(
                                 state["editing_id"],
                                 n,
                                 (desc.value or "").strip(),
                                 float(rate.value or 0),
+                                wc,
                                 rate_type.value,
                                 svc_type.value,
                             )
@@ -183,6 +196,7 @@ def render_products():
                                 n,
                                 (desc.value or "").strip(),
                                 float(rate.value or 0),
+                                wc,
                                 rate_type.value,
                                 svc_type.value,
                             )
@@ -190,7 +204,7 @@ def render_products():
                         refresh_table()
                         show_empty_form()
                     except ValueError:
-                        notify_warning("Enter a valid numeric rate.")
+                        notify_warning("Enter valid numeric rates.")
 
                 with form_actions_row():
                     success_button("Save", on_click=save)
@@ -252,5 +266,7 @@ def render_products():
         else:
             toolbar(search)
 
-        list_panel, detail_panel = split_panels()
+        list_panel, detail_panel = split_panels(
+            panel_height="height: calc(100dvh - 17rem); max-height: calc(100dvh - 17rem);"
+        )
         switch_tab("products")

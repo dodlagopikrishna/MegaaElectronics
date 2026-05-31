@@ -2,7 +2,8 @@
 
 from nicegui import ui
 
-from models import get_all_clients, get_all_products, get_all_services
+from models import get_all_clients, get_all_products, get_all_services, _unit_cost_for_item, sort_line_items
+from store_config import DEFAULT_GST_RATE
 from ui_theme import (
     LIST_ROW,
     card,
@@ -18,12 +19,16 @@ from ui_theme import (
 )
 
 
-def calc_totals(line_items, tax_rate: float, discount_pct: float):
+def calc_totals(line_items, tax_rate: float, discount_pct: float, tax_enabled: bool = True):
     subtotal = sum(item["total_price"] for item in line_items)
     discount_amt = subtotal * (discount_pct / 100)
     after_discount = subtotal - discount_amt
-    tax_amt = after_discount * (tax_rate / 100)
-    total = after_discount + tax_amt
+    if tax_enabled:
+        tax_amt = after_discount * (tax_rate / 100)
+        total = after_discount + tax_amt
+    else:
+        tax_amt = 0
+        total = after_discount
     return subtotal, discount_amt, tax_amt, total
 
 
@@ -34,7 +39,7 @@ def build_transaction_form(
     save_label: str,
     on_save,
     on_cancel,
-    tx_id=None,
+    doc_id=None,
     initial_transaction=None,
     initial_items=None,
 ):
@@ -49,10 +54,11 @@ def build_transaction_form(
                     "description": item.get("description", ""),
                     "quantity": item["quantity"],
                     "unit_price": item["unit_price"],
+                    "unit_cost": item.get("unit_cost", 0),
                     "total_price": item["total_price"],
-                    "maintenance_schedule": item.get("maintenance_schedule", ""),
                 }
             )
+        line_items.sort(key=lambda x: (0 if x["item_type"] == "product" else 1, (x.get("item_name") or "").lower()))
 
     detail_panel.clear()
     with detail_panel:
@@ -75,15 +81,20 @@ def build_transaction_form(
                 results_box = ui.column().classes("w-full gap-1")
 
             items_box = ui.column().classes("w-full gap-2")
-            totals_label = ui.label("").classes("text-sm text-right text-gray-700 w-full")
+            totals_label = ui.label("").classes(
+                "text-sm text-right text-gray-700 w-full min-w-0 break-words whitespace-normal"
+            )
+
+            tax_enabled_initial = bool(initial_transaction.get("tax_enabled")) if initial_transaction else False
+            apply_tax = ui.switch("Apply GST", value=tax_enabled_initial)
 
             with ui.grid().classes("w-full gap-4 grid-cols-1 md:grid-cols-2"):
                 tax_inp = labeled_input("Tax Rate (%)")
-                tax_inp.value = (
-                    str(initial_transaction["tax_rate"])
-                    if initial_transaction
-                    else "9"
-                )
+                if initial_transaction and tax_enabled_initial:
+                    tax_inp.value = str(initial_transaction.get("tax_rate", DEFAULT_GST_RATE))
+                else:
+                    tax_inp.value = str(DEFAULT_GST_RATE)
+                tax_inp.set_visibility(tax_enabled_initial)
                 discount_inp = labeled_input("Discount (%)")
                 discount_inp.value = (
                     str(initial_transaction.get("discount_percent", 0))
@@ -94,27 +105,41 @@ def build_transaction_form(
                 if initial_transaction:
                     notes.value = initial_transaction.get("notes", "") or ""
 
+            def on_tax_toggle():
+                tax_inp.set_visibility(apply_tax.value)
+                update_totals()
+
+            apply_tax.on_value_change(lambda _: on_tax_toggle())
+
             def get_rates():
+                tax_on = bool(apply_tax.value)
                 try:
-                    tax_rate = float(tax_inp.value or 0)
+                    tax_rate = float(tax_inp.value or 0) if tax_on else 0
                 except ValueError:
                     tax_rate = 0
                 try:
                     discount_pct = float(discount_inp.value or 0)
                 except ValueError:
                     discount_pct = 0
-                return tax_rate, discount_pct
+                return tax_on, tax_rate, discount_pct
 
             def update_totals():
-                tax_rate, discount_pct = get_rates()
-                sub, disc, tax, tot = calc_totals(line_items, tax_rate, discount_pct)
-                totals_label.text = (
-                    f"Subtotal: ₹{sub:,.2f}  |  Discount: -₹{disc:,.2f}  |  "
-                    f"Tax: ₹{tax:,.2f}  |  Total: ₹{tot:,.2f}"
-                )
+                tax_on, tax_rate, discount_pct = get_rates()
+                sub, disc, tax, tot = calc_totals(line_items, tax_rate, discount_pct, tax_on)
+                if tax_on:
+                    totals_label.text = (
+                        f"Subtotal: ₹{sub:,.2f}  |  Discount: -₹{disc:,.2f}  |  "
+                        f"Tax: ₹{tax:,.2f}  |  Total (incl. tax): ₹{tot:,.2f}"
+                    )
+                else:
+                    totals_label.text = (
+                        f"Subtotal: ₹{sub:,.2f}  |  Discount: -₹{disc:,.2f}  |  "
+                        f"Total: ₹{tot:,.2f}"
+                    )
 
             def refresh_lines():
                 items_box.clear()
+                line_items.sort(key=lambda x: (0 if x["item_type"] == "product" else 1, (x.get("item_name") or "").lower()))
                 with items_box:
                     if not line_items:
                         ui.label("No items added yet.").classes("text-gray-500 text-sm")
@@ -149,16 +174,6 @@ def build_transaction_form(
                                     update_totals(),
                                 ),
                             )
-                        if item["item_type"] == "service":
-                            maint = ui.input(
-                                placeholder="Maintenance schedule (e.g. Monthly)",
-                                value=item.get("maintenance_schedule", ""),
-                            ).props("outlined dense").classes(INPUT)
-
-                            def on_maint(e, i=idx):
-                                line_items[i]["maintenance_schedule"] = e.value or ""
-
-                            maint.on_value_change(on_maint)
                 update_totals()
 
             def do_search():
@@ -182,16 +197,18 @@ def build_transaction_form(
                                     "item_name": item["name"],
                                     "description": item["category"],
                                     "quantity": 1,
-                                    "unit_price": item["retail_price"],
-                                    "total_price": item["retail_price"],
-                                    "maintenance_schedule": "",
+                                    "unit_price": item["sell_price"],
+                                    "unit_cost": item["buy_price"],
+                                    "total_price": item["sell_price"],
                                 }
                             )
+                            search.value = ""
+                            results_box.clear()
                             refresh_lines()
 
                         with ui.row().classes("w-full justify-between items-center"):
                             ui.label(
-                                f"[P] {p['name']} — ₹{p['retail_price']:.2f} "
+                                f"[P] {p['name']} — ₹{p['sell_price']:.2f} "
                                 f"({p['stock_count']} in stock)"
                             ).classes("text-xs")
                             ghost_button("Add Product", on_click=add_p)
@@ -206,10 +223,12 @@ def build_transaction_form(
                                     "description": item.get("description", ""),
                                     "quantity": 1,
                                     "unit_price": item["rate"],
+                                    "unit_cost": item.get("worker_cost", 0),
                                     "total_price": item["rate"],
-                                    "maintenance_schedule": "",
                                 }
                             )
+                            search.value = ""
+                            results_box.clear()
                             refresh_lines()
 
                         with ui.row().classes("w-full justify-between items-center"):
@@ -219,6 +238,8 @@ def build_transaction_form(
                             ghost_button("Add Service", on_click=add_s)
 
             search.on("update:model-value", lambda _: ui.timer(0.25, do_search, once=True))
+            tax_inp.on_value_change(lambda _: update_totals())
+            discount_inp.on_value_change(lambda _: update_totals())
             refresh_lines()
 
             def save():
@@ -232,12 +253,16 @@ def build_transaction_form(
                         client_id = int(str(sel).split(":")[0])
                     except ValueError:
                         pass
-                tax_rate, discount_pct = get_rates()
-                sub, disc, tax, tot = calc_totals(line_items, tax_rate, discount_pct)
+                tax_on, tax_rate, discount_pct = get_rates()
+                sub, disc, tax, tot = calc_totals(line_items, tax_rate, discount_pct, tax_on)
+                for item in line_items:
+                    if "unit_cost" not in item:
+                        item["unit_cost"] = _unit_cost_for_item(item["item_type"], item["item_id"])
                 payload = dict(
                     client_id=client_id,
                     line_items=line_items,
                     subtotal=sub,
+                    tax_enabled=tax_on,
                     tax_rate=tax_rate,
                     tax_amount=tax,
                     discount_percent=discount_pct,
@@ -245,8 +270,8 @@ def build_transaction_form(
                     total=tot,
                     notes=(notes.value or "").strip(),
                 )
-                if tx_id is not None:
-                    payload["tx_id"] = tx_id
+                if doc_id is not None:
+                    payload["doc_id"] = doc_id
                 on_save(**payload)
 
             with form_actions_row():

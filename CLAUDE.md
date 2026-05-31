@@ -100,11 +100,11 @@ Migrations copy from legacy names (`mega_electronics.db`, older app-support fold
 
 ### Business tables
 
-- `products` — hardware: `cost_price`, `retail_price`, `stock_count`, `unit` (pcs, meters, …)
-- `services` — labour: `rate`, `rate_type` (Flat Fee / Hourly Rate), `service_type` (Installation / Maintenance)
-- `clients` — name, phone (+91 default in UI), email, address
-- `transactions` — header: `type` (`Estimate` | `Invoice`), `status` (`Pending` | `Paid`), tax/discount fields, `notes`
-- `transaction_items` — line items; `item_type` `product` | `service`; optional `maintenance_schedule`
+- `products` — hardware: `buy_price`, `sell_price`, `stock_count`, `unit` (pcs, meters, …)
+- `services` — labour: `rate` (customer charge), `worker_cost`, `rate_type` (Flat Fee / Hourly Rate), `service_type` (Installation / Maintenance)
+- `clients` — name, phone (+91 default in UI), email, address, `location` (Google Maps URL)
+- `estimates` / `estimate_items` — quotation headers and line items (`unit_cost` snapshot for margin)
+- `invoices` / `invoice_items` — invoice headers (`status` Pending/Paid, optional `source_estimate_id`) and line items
 
 ### Auth / RBAC
 
@@ -116,8 +116,9 @@ Default roles: Admin (all), Sales, Inventory, Technician — see seed map in `da
 
 ### Key business rules
 
-- **Estimates** can be edited (`update_transaction` only when `type='Estimate'`).
-- **Convert estimate → invoice** (`convert_estimate_to_invoice`): sets type/status and **decrements product stock** per line item.
+- **Estimates** live in `estimates` + `estimate_items`; editable via `update_estimate`.
+- **Invoices** live in `invoices` + `invoice_items`; status via `update_invoice_status`.
+- **Convert estimate → invoice** (`convert_estimate_to_invoice`): copies to new invoice row, keeps estimate, decrements product stock.
 - **Walk-in**: `client_id` may be null; display name falls back to "Walk-in Customer" in PDFs.
 - **Currency / locale**: Indian Rupees (`₹`), GST labels in UI, default country code `+91` (`country_phone_codes.DEFAULT_COUNTRY_CODE`).
 - **Dashboard**: paid invoice sum, pending totals, low stock (≤5), maintenance rows from line items.

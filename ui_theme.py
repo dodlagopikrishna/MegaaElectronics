@@ -32,14 +32,15 @@ BRAND_ACCENT = f"text-[{PRIMARY}]"
 
 PAGE_COLUMN = "max-w-4xl mx-auto w-full p-4"
 PAGE_WIDE = "max-w-6xl mx-auto w-full p-4"
-PAGE_SHELL = "w-full flex-1 min-h-0 h-full flex flex-col gap-4"
-PAGE_CONTENT = "w-full flex-1 min-h-0 flex flex-col gap-4 min-h-0"
-SCROLL_PANEL = "w-full min-h-0 overflow-y-auto overflow-x-hidden"
-PANEL_OUTER = "min-h-0 h-full w-full flex flex-col overflow-hidden"
-SCROLL_VIEWPORT = "height: calc(100dvh - 10.5rem); max-height: calc(100dvh - 10.5rem); width: 100%;"
+PAGE_SHELL = "w-full flex-1 min-h-0 h-full flex flex-col gap-4 overflow-hidden"
+PAGE_CONTENT = "w-full flex-1 min-h-0 flex flex-col gap-4 overflow-hidden"
+SCROLL_PANEL = "w-full overflow-y-auto overflow-x-hidden mega-page-scroll"
+PANEL_OUTER = "min-h-0 min-w-0 w-full flex flex-col"
+PANEL_SCROLL = f"{SCROLL_PANEL} w-full"
+PAGE_BODY_SCROLL_HEIGHT = "height: calc(100dvh - 11rem); max-height: calc(100dvh - 11rem);"
+SPLIT_PANEL_HEIGHT = "height: calc(100dvh - 14rem); max-height: calc(100dvh - 14rem);"
 SPLIT_GRID = (
-    "w-full flex-1 min-h-0 gap-4 grid grid-cols-1 lg:grid-cols-12 "
-    "grid-rows-1 items-stretch min-h-0"
+    "mega-split-grid w-full gap-4 grid grid-cols-1 lg:grid-cols-12 items-start"
 )
 FORM_ACTIONS = (
     "gap-2 mt-2 pt-3 shrink-0 w-full border-t border-slate-200/60"
@@ -101,8 +102,8 @@ BRAND_LOGO_SIDEBAR = (
     "h-auto object-contain object-left"
 )
 MAIN_PANE = "flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden bg-[#f2f2f7]/50"
-MAIN_SCROLL = "w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-MAIN_VIEW_SHELL = "mega-main-view w-full flex-1 min-h-0 h-full flex flex-col"
+MAIN_VIEW_HOST = "w-full flex-1 min-h-0 overflow-hidden flex flex-col"
+MAIN_VIEW_SHELL = "mega-main-view w-full flex-1 min-h-0 h-full flex flex-col overflow-hidden"
 VIEW_TRANSITION_MS = 320
 APP_SHELL = "w-full h-full min-h-0 flex flex-col overflow-hidden"
 APP_BODY = "flex-1 min-h-0 w-full flex overflow-hidden grow"
@@ -210,6 +211,10 @@ html, body, .nicegui-content {
   border-radius: 999px !important;
   opacity: 0.85;
 }
+.mega-page-scroll.q-scrollarea .q-scrollarea__bar--v {
+  opacity: 1 !important;
+  width: 8px;
+}
 .q-badge {
   border-radius: 999px !important;
   font-weight: 600;
@@ -305,6 +310,72 @@ html, body, .nicegui-content {
     max-height: 120px;
   }
 }
+/* Dashboard stat groups */
+.mega-stat-group {
+  padding: 0 !important;
+  overflow: hidden;
+}
+.mega-stat-group-header {
+  display: flex;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease;
+}
+.mega-stat-group-body {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.25s ease;
+}
+.mega-stat-group.is-open .mega-stat-group-body {
+  max-height: 720px;
+  opacity: 1;
+}
+.mega-stat-group-inner {
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mega-stat-group-body {
+    transition: none !important;
+  }
+}
+/* Page scroll — always-visible scrollbar for desktop UX */
+.mega-page-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.55) transparent;
+}
+.mega-page-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.mega-page-scroll::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: 999px;
+}
+.mega-page-scroll::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.55);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.mega-page-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.75);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+/* Master/detail grid — let each panel size from its own explicit height */
+.mega-split-grid {
+  align-items: start;
+}
 """
 
 
@@ -348,8 +419,9 @@ def page_shell(title: str, *, wide: bool = False):
 @contextmanager
 def page_scroll_body():
     """Scrollable page body for single-column layouts (e.g. dashboard)."""
-    # Use flex + overflow on a column — 100dvh scroll areas collapse in native pywebview.
-    with ui.column().classes(f"w-full flex-1 min-h-0 {SCROLL_PANEL} gap-4"):
+    with ui.column().classes(
+        "w-full overflow-y-auto overflow-x-hidden gap-4 mega-page-scroll pr-1 pb-4"
+    ).style(PAGE_BODY_SCROLL_HEIGHT):
         yield
 
 
@@ -488,25 +560,24 @@ def sidebar_user_menu(
 
 
 def toolbar(search_input, *, add_label: str | None = None, on_add=None):
-    with ui.row().classes("w-full gap-3 items-center flex-wrap shrink-0"):
-        search_input.classes("flex-grow")
+    with ui.row().classes("w-full gap-3 items-center flex-wrap shrink-0") as row:
+        search_input.move(row)
+        search_input.classes(remove="w-full shrink-0")
+        search_input.classes("flex-1 min-w-[200px]")
         if add_label and on_add:
             success_button(add_label, on_click=on_add)
 
 
-def split_panels(*, list_weight: str = "lg:col-span-5", detail_weight: str = "lg:col-span-7"):
-    """Master/detail columns; both sides scroll when content overflows."""
+def split_panels(*, list_cols: str = "lg:col-span-5", detail_cols: str = "lg:col-span-7", panel_height: str = ""):
+    """Master/detail columns; each side scrolls independently when content overflows."""
+    height_style = panel_height if panel_height else SPLIT_PANEL_HEIGHT
     with ui.grid().classes(SPLIT_GRID):
-        with ui.column().classes(f"{list_weight} {PANEL_OUTER}"):
-            list_scroll = ui.scroll_area().classes("w-full").props("visible")
-            list_scroll.style(SCROLL_VIEWPORT)
-            with list_scroll:
-                list_panel = ui.column().classes("w-full gap-4")
-        with ui.column().classes(f"{detail_weight} {PANEL_OUTER}"):
-            detail_scroll = ui.scroll_area().classes("w-full").props("visible")
-            detail_scroll.style(SCROLL_VIEWPORT)
-            with detail_scroll:
-                detail_panel = ui.column().classes("w-full gap-4")
+        with ui.column().classes(f"{list_cols} {PANEL_OUTER}"):
+            with ui.column().classes(PANEL_SCROLL).style(height_style):
+                list_panel = ui.column().classes("w-full min-w-0 gap-4 pr-1 pb-4")
+        with ui.column().classes(f"{detail_cols} {PANEL_OUTER}"):
+            with ui.column().classes(PANEL_SCROLL).style(height_style):
+                detail_panel = ui.column().classes("w-full min-w-0 gap-4 pr-1 pb-4")
     return list_panel, detail_panel
 
 
@@ -540,7 +611,7 @@ def show_pdf_in_detail_panel(
                     "w-full border-0 rounded-xl bg-white "
                     "shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]"
                 )
-                .style("height: calc(100dvh - 13rem); min-height: 480px;")
+                .style("height: calc(100dvh - 16rem); min-height: 360px; max-height: calc(100dvh - 16rem);")
             )
 
 
@@ -548,13 +619,46 @@ def stat_cards_grid():
     return ui.grid().classes("w-full gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4")
 
 
-def stat_card(title: str, value: str, accent: str = PRIMARY):
+@contextmanager
+def collapsible_stat_group(
+    title: str,
+    summary: str = "",
+    *,
+    caption: str = "",
+    default_open: bool = True,
+):
+    """Dashboard stat section with a static header."""
+    _apply_global_styles()
+    group_classes = f"mega-stat-group is-open {CARD}"
+
+    with ui.element("div").classes(group_classes):
+        with ui.element("div").classes(
+            "w-full flex items-center gap-3 px-4 py-3"
+        ):
+            with ui.column().classes("items-start gap-0.5 min-w-0 text-left"):
+                ui.label(title).classes(TEXT_SUBHEADING)
+                if summary:
+                    ui.label(summary).classes(
+                        "text-base font-bold text-slate-900 tracking-tight"
+                    )
+                if caption:
+                    ui.label(caption).classes(TEXT_CAPTION)
+
+        with ui.element("div").classes("mega-stat-group-body"):
+            with ui.element("div").classes("mega-stat-group-inner"):
+                with ui.column().classes("w-full gap-4 px-4 pb-4 pt-1") as content:
+                    yield content
+
+
+def stat_card(title: str, value: str, accent: str = PRIMARY, subtitle: str = ""):
     with ui.card().classes(f"{CARD} p-4 w-full"):
         with ui.row().classes("w-full items-stretch gap-3"):
             ui.element("div").classes("w-1.5 rounded-full shadow-sm").style(f"background:{accent}")
             with ui.column().classes("gap-1"):
                 ui.label(title).classes(TEXT_CAPTION)
                 ui.label(value).classes("text-xl font-bold text-slate-900 tracking-tight")
+                if subtitle:
+                    ui.label(subtitle).classes("text-xs text-gray-500")
 
 
 def empty_state(message: str):
