@@ -2,9 +2,7 @@
 
 STORE_NAME = "MEGAA Electronics"
 STORE_DB_FILENAME = "megaa_electronics.db"
-LEGACY_DB_FILENAME = "mega_electronics.db"
 STORE_LOGO_FILENAME = "megaa_electronics_logo.png"
-LEGACY_LOGO_FILENAME = "mega_electronics_logo.png"
 STORE_STORAGE_SECRET = "megaa-electronics-local-secret"
 STORE_TAGLINE = (
     "Projectors, Projector Screens, CCTV Cameras, WiFi & Solar 4G Cameras, "

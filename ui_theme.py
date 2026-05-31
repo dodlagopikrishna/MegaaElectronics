@@ -7,12 +7,9 @@ from nicegui import ui
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 
-from store_config import LEGACY_LOGO_FILENAME, STORE_LOGO_FILENAME
+from store_config import STORE_LOGO_FILENAME
 
-_logo_path = ASSETS_DIR / STORE_LOGO_FILENAME
-if not _logo_path.is_file():
-    _logo_path = ASSETS_DIR / LEGACY_LOGO_FILENAME
-LOGO_URL = f"/assets/{_logo_path.name}"
+LOGO_URL = f"/assets/{STORE_LOGO_FILENAME}"
 
 PRIMARY = "#3b82f6"
 SUCCESS = "#10b981"

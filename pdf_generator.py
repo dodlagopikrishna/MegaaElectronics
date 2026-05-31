@@ -5,7 +5,6 @@ import os
 from PIL import Image
 
 from store_config import (
-    LEGACY_LOGO_FILENAME,
     STORE_ADDRESS,
     STORE_CITY,
     STORE_GSTIN,
@@ -27,12 +26,7 @@ LOGO_HEIGHT_MM = 32
 
 def _get_logo_path():
     path = os.path.join(ASSETS_DIR, STORE_LOGO_FILENAME)
-    if os.path.isfile(path):
-        return path
-    legacy = os.path.join(ASSETS_DIR, LEGACY_LOGO_FILENAME)
-    if os.path.isfile(legacy):
-        return legacy
-    return None
+    return path if os.path.isfile(path) else None
 
 
 def _prepare_logo_for_pdf():
