@@ -222,7 +222,7 @@ def _seed_roles_and_permissions():
         conn.close()
         return
 
-    roles = ["Admin", "Sales", "Inventory", "Technician"]
+    roles = ["Admin", "Sales", "Technician"]
     for role in roles:
         cursor.execute("INSERT INTO roles (role_name) VALUES (?)", (role,))
 
@@ -242,19 +242,16 @@ def _seed_roles_and_permissions():
     role_permission_map = {
         "Admin": all_permissions,
         "Sales": [
-            "Dashboard", "Clients_View", "Clients_Edit",
-            "Quotes_View", "Quotes_Create",
-            "Invoices_View", "Invoices_Create",
-            "Maintenance_View",
-            "Products_View", "Services_View", "Export_PDF",
-        ],
-        "Inventory": [
-            "Dashboard", "Products_View", "Products_Edit", "Products_Delete",
+            "Products_View", "Products_Edit", "Products_Delete",
             "Services_View", "Services_Edit", "Services_Delete",
             "Stock_Edit", "Cost_Prices",
+            "Clients_View", "Clients_Edit", "Clients_Delete",
+            "Quotes_View", "Quotes_Create", "Quotes_Delete",
+            "Invoices_View", "Invoices_Create",
+            "Maintenance_View", "Maintenance_Edit", "Maintenance_Delete",
+            "Export_PDF", "Financials",
         ],
         "Technician": [
-            "Dashboard", "Services_View", "Service_Complete",
             "Maintenance_View", "Maintenance_Edit",
         ],
     }
