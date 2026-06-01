@@ -1,0 +1,77 @@
+name: Build Windows Installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 (64-bit)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-build.txt
+          pip install Pillow
+
+      - name: Convert PNG logo to ICO
+        run: |
+          python -c "
+          from PIL import Image
+          import os
+          src = os.path.join('assets', 'megaa_electronics_logo.png')
+          dst = os.path.join('assets', 'megaa_electronics_logo.ico')
+          if os.path.isfile(src):
+              img = Image.open(src).convert('RGBA')
+              bbox = img.getbbox()
+              if bbox:
+                  img = img.crop(bbox)
+              sizes = [(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)]
+              img.save(dst, format='ICO', sizes=sizes)
+              print(f'Created {dst}')
+          else:
+              print(f'Logo not found at {src}, skipping ICO generation')
+          "
+
+      - name: Build with PyInstaller
+        run: pyinstaller megaa.spec
+
+      - name: Verify build output
+        run: |
+          dir "dist\MEGAA Electronics"
+          if (Test-Path "dist\MEGAA Electronics\MEGAA Electronics.exe") {
+            Write-Host "Build successful — exe found"
+          } else {
+            Write-Error "Build failed — exe not found"
+            exit 1
+          }
+
+      - name: Build installer with Inno Setup
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+
+      - name: Upload portable executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: MEGAA-Electronics-Portable
+          path: dist/MEGAA Electronics/
+          retention-days: 30
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: MEGAA-Electronics-Installer
+          path: installer_output/MEGAA_Electronics_Setup.exe
+          retention-days: 30
