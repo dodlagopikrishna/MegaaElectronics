@@ -362,7 +362,6 @@ def generate_transaction_pdf(transaction, items, save_path=None):
             "1. Payment is due upon receipt unless otherwise agreed in writing.",
             "2. Goods once sold will not be taken back except for manufacturing defects.",
             "3. Warranty: 1 year on hardware, 90 days on installation workmanship.",
-            "4. All disputes are subject to Nellore jurisdiction only.",
         ]
     else:
         terms = [
