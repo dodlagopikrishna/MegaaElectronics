@@ -109,6 +109,7 @@ def render_quotes():
             tax_enabled=kwargs["tax_enabled"],
             tax_rate=kwargs["tax_rate"],
             tax_amount=kwargs["tax_amount"],
+            discount_type=kwargs.get("discount_type", "flat"),
             discount_percent=kwargs["discount_percent"],
             discount_amount=kwargs["discount_amount"],
             notes=kwargs["notes"],
@@ -180,10 +181,13 @@ def render_quotes():
                             ui.label(f"₹{item['total_price']:,.2f}").classes("font-semibold")
                 with card():
                     lines = [("Subtotal", f"₹{tx['subtotal']:,.2f}")]
-                    if tx.get("discount_percent", 0) > 0:
-                        lines.append(
-                            (f"Discount ({tx['discount_percent']}%)", f"-₹{tx['discount_amount']:,.2f}")
-                        )
+                    if tx.get("discount_amount", 0) > 0 or tx.get("discount_percent", 0) > 0:
+                        dtype = tx.get("discount_type", "flat")
+                        if dtype == "flat":
+                            disc_lbl = f"Discount (₹{tx['discount_percent']:,.2f} off)"
+                        else:
+                            disc_lbl = f"Discount ({tx['discount_percent']}%)"
+                        lines.append((disc_lbl, f"-₹{tx['discount_amount']:,.2f}"))
                     lines.extend(_tax_lines(tx))
                     lines.append(("Total", f"₹{tx['total_amount']:,.2f}"))
                     for lbl, val in lines:

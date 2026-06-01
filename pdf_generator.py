@@ -319,9 +319,14 @@ def generate_transaction_pdf(transaction, items, save_path=None):
     pdf.cell(val_x - totals_x - 30, 6, "Subtotal:")
     pdf.cell(30, 6, f"Rs.{transaction.get('subtotal', 0):,.2f}", align="R", ln=True)
 
-    if transaction.get("discount_percent", 0) > 0:
+    if transaction.get("discount_amount", 0) > 0 or transaction.get("discount_percent", 0) > 0:
+        dtype = transaction.get("discount_type", "flat")
+        if dtype == "flat":
+            disc_label = f"Discount (Rs.{transaction['discount_percent']:,.2f} off):"
+        else:
+            disc_label = f"Discount ({transaction['discount_percent']}%):"
         pdf.set_xy(totals_x, pdf.get_y())
-        pdf.cell(val_x - totals_x - 30, 6, f"Discount ({transaction['discount_percent']}%):")
+        pdf.cell(val_x - totals_x - 30, 6, disc_label)
         pdf.cell(30, 6, f"-Rs.{transaction.get('discount_amount', 0):,.2f}", align="R", ln=True)
 
     if transaction.get("tax_enabled") or transaction.get("tax_rate", 0) > 0:

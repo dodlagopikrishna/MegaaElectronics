@@ -64,21 +64,32 @@ def render_dashboard():
                         subtitle=f"{stats['estimates_count']} estimates",
                     )
 
+                net_profit = stats["profit_with_services"] - stats["total_discounts"]
                 with collapsible_stat_group(
                     "Profit",
-                    f"₹{stats['profit_with_services']:,.2f}",
-                    caption="incl. services",
+                    f"₹{net_profit:,.2f}",
+                    caption="Net profit (after discounts)",
                 ):
                     with ui.grid().classes("w-full gap-4 grid-cols-1 md:grid-cols-2"):
                         stat_card(
-                            "Profit (products only)",
+                            "Gross Profit (products only)",
                             f"₹{stats['profit_products_only']:,.2f}",
                             "#0ea5e9",
                         )
                         stat_card(
-                            "Profit (incl. services)",
+                            "Gross Profit (incl. services)",
                             f"₹{stats['profit_with_services']:,.2f}",
                             PRIMARY,
+                        )
+                        stat_card(
+                            "Total Discounts",
+                            f"₹{stats['total_discounts']:,.2f}",
+                            "#e67e22",
+                        )
+                        stat_card(
+                            "Net Profit",
+                            f"₹{net_profit:,.2f}",
+                            SUCCESS,
                         )
 
                 stat_card("Total Clients", str(stats["total_clients"]), "#64748b")

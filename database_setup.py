@@ -78,6 +78,7 @@ def initialize_database():
             tax_enabled INTEGER NOT NULL DEFAULT 0,
             tax_rate REAL NOT NULL DEFAULT 0,
             tax_amount REAL NOT NULL DEFAULT 0,
+            discount_type TEXT NOT NULL DEFAULT 'flat',
             discount_percent REAL NOT NULL DEFAULT 0,
             discount_amount REAL NOT NULL DEFAULT 0,
             notes TEXT DEFAULT '',
@@ -108,6 +109,7 @@ def initialize_database():
             tax_enabled INTEGER NOT NULL DEFAULT 0,
             tax_rate REAL NOT NULL DEFAULT 0,
             tax_amount REAL NOT NULL DEFAULT 0,
+            discount_type TEXT NOT NULL DEFAULT 'flat',
             discount_percent REAL NOT NULL DEFAULT 0,
             discount_amount REAL NOT NULL DEFAULT 0,
             status TEXT NOT NULL DEFAULT 'Pending',
@@ -210,6 +212,7 @@ def initialize_database():
     conn.close()
 
     _seed_roles_and_permissions()
+
 
 
 def _seed_roles_and_permissions():

@@ -331,18 +331,19 @@ def create_estimate(
     tax_enabled,
     tax_rate,
     tax_amount,
-    discount_percent,
-    discount_amount,
-    notes,
-    items,
+    discount_type="flat",
+    discount_percent=0,
+    discount_amount=0,
+    notes="",
+    items=None,
 ):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
         """INSERT INTO estimates
            (client_id, date, total_amount, subtotal, tax_enabled, tax_rate, tax_amount,
-            discount_percent, discount_amount, notes)
-           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            discount_type, discount_percent, discount_amount, notes)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
         (
             client_id,
             datetime.now().strftime("%Y-%m-%d"),
@@ -351,13 +352,14 @@ def create_estimate(
             1 if tax_enabled else 0,
             tax_rate if tax_enabled else 0,
             tax_amount if tax_enabled else 0,
+            discount_type,
             discount_percent,
             discount_amount,
             notes,
         ),
     )
     estimate_id = cursor.lastrowid
-    _insert_estimate_items(cursor, estimate_id, items)
+    _insert_estimate_items(cursor, estimate_id, items or [])
     conn.commit()
     conn.close()
     return estimate_id
@@ -371,17 +373,18 @@ def update_estimate(
     tax_enabled,
     tax_rate,
     tax_amount,
-    discount_percent,
-    discount_amount,
-    notes,
-    items,
+    discount_type="flat",
+    discount_percent=0,
+    discount_amount=0,
+    notes="",
+    items=None,
 ):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
         """UPDATE estimates SET
            client_id=?, total_amount=?, subtotal=?, tax_enabled=?, tax_rate=?, tax_amount=?,
-           discount_percent=?, discount_amount=?, notes=?
+           discount_type=?, discount_percent=?, discount_amount=?, notes=?
            WHERE id=?""",
         (
             client_id,
@@ -390,6 +393,7 @@ def update_estimate(
             1 if tax_enabled else 0,
             tax_rate if tax_enabled else 0,
             tax_amount if tax_enabled else 0,
+            discount_type,
             discount_percent,
             discount_amount,
             notes,
@@ -485,11 +489,12 @@ def create_invoice(
     tax_enabled,
     tax_rate,
     tax_amount,
-    discount_percent,
-    discount_amount,
-    status,
-    notes,
-    items,
+    discount_type="flat",
+    discount_percent=0,
+    discount_amount=0,
+    status="Pending",
+    notes="",
+    items=None,
     source_estimate_id=None,
 ):
     conn = get_connection()
@@ -497,8 +502,8 @@ def create_invoice(
     cursor.execute(
         """INSERT INTO invoices
            (client_id, date, total_amount, subtotal, tax_enabled, tax_rate, tax_amount,
-            discount_percent, discount_amount, status, source_estimate_id, notes)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            discount_type, discount_percent, discount_amount, status, source_estimate_id, notes)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             client_id,
             datetime.now().strftime("%Y-%m-%d"),
@@ -507,6 +512,7 @@ def create_invoice(
             1 if tax_enabled else 0,
             tax_rate if tax_enabled else 0,
             tax_amount if tax_enabled else 0,
+            discount_type,
             discount_percent,
             discount_amount,
             status,
@@ -515,7 +521,7 @@ def create_invoice(
         ),
     )
     invoice_id = cursor.lastrowid
-    _insert_invoice_items(cursor, invoice_id, items)
+    _insert_invoice_items(cursor, invoice_id, items or [])
     conn.commit()
     conn.close()
     return invoice_id
@@ -542,6 +548,7 @@ def convert_estimate_to_invoice(estimate_id):
         tax_enabled=bool(estimate.get("tax_enabled")),
         tax_rate=estimate["tax_rate"],
         tax_amount=estimate["tax_amount"],
+        discount_type=estimate.get("discount_type", "flat"),
         discount_percent=estimate["discount_percent"],
         discount_amount=estimate["discount_amount"],
         status="Pending",
@@ -713,6 +720,14 @@ def get_dashboard_stats(date_from, date_to):
            ORDER BY ms.next_due_date ASC"""
     ).fetchall()
     stats["maintenance_reminders"] = [dict(r) for r in maintenance]
+
+    row = conn.execute(
+        """SELECT COALESCE(SUM(discount_amount), 0) as total_discounts
+           FROM invoices
+           WHERE date >= ? AND date <= ?""",
+        (date_from, date_to),
+    ).fetchone()
+    stats["total_discounts"] = row["total_discounts"]
 
     row = conn.execute("SELECT COUNT(*) as cnt FROM clients").fetchone()
     stats["total_clients"] = row["cnt"]

@@ -19,9 +19,12 @@ from ui_theme import (
 )
 
 
-def calc_totals(line_items, tax_rate: float, discount_pct: float, tax_enabled: bool = True):
+def calc_totals(line_items, tax_rate: float, discount_value: float, tax_enabled: bool = True, discount_type: str = "flat"):
     subtotal = sum(item["total_price"] for item in line_items)
-    discount_amt = subtotal * (discount_pct / 100)
+    if discount_type == "flat":
+        discount_amt = min(discount_value, subtotal)
+    else:
+        discount_amt = subtotal * (discount_value / 100)
     after_discount = subtotal - discount_amt
     if tax_enabled:
         tax_amt = after_discount * (tax_rate / 100)
@@ -99,7 +102,18 @@ def build_transaction_form(
                 if not tax_enabled_initial:
                     tax_wrap.classes("invisible")
                 with ui.column().classes("flex-1 gap-0"):
-                    discount_inp = labeled_input("Discount (%)")
+                    discount_type_opts = {"percentage": "Percentage (%)", "flat": "Flat (₹)"}
+                    initial_dtype = (
+                        initial_transaction.get("discount_type", "flat")
+                        if initial_transaction
+                        else "flat"
+                    )
+                    discount_type_sel = ui.select(
+                        options=discount_type_opts,
+                        value=initial_dtype,
+                        label="Discount Type",
+                    ).props("outlined dense").classes("w-full mb-1")
+                    discount_inp = labeled_input("Discount Value")
                     discount_inp.value = (
                         str(initial_transaction.get("discount_percent", 0))
                         if initial_transaction
@@ -125,22 +139,24 @@ def build_transaction_form(
                 except ValueError:
                     tax_rate = 0
                 try:
-                    discount_pct = float(discount_inp.value or 0)
+                    discount_val = float(discount_inp.value or 0)
                 except ValueError:
-                    discount_pct = 0
-                return tax_on, tax_rate, discount_pct
+                    discount_val = 0
+                dtype = discount_type_sel.value or "flat"
+                return tax_on, tax_rate, discount_val, dtype
 
             def update_totals():
-                tax_on, tax_rate, discount_pct = get_rates()
-                sub, disc, tax, tot = calc_totals(line_items, tax_rate, discount_pct, tax_on)
+                tax_on, tax_rate, discount_val, dtype = get_rates()
+                sub, disc, tax, tot = calc_totals(line_items, tax_rate, discount_val, tax_on, dtype)
+                disc_label = f"{discount_val}%" if dtype == "percentage" else f"₹{discount_val:,.2f}"
                 if tax_on:
                     totals_label.text = (
-                        f"Subtotal: ₹{sub:,.2f}  |  Discount: -₹{disc:,.2f}  |  "
+                        f"Subtotal: ₹{sub:,.2f}  |  Discount ({disc_label}): -₹{disc:,.2f}  |  "
                         f"Tax: ₹{tax:,.2f}  |  Total (incl. tax): ₹{tot:,.2f}"
                     )
                 else:
                     totals_label.text = (
-                        f"Subtotal: ₹{sub:,.2f}  |  Discount: -₹{disc:,.2f}  |  "
+                        f"Subtotal: ₹{sub:,.2f}  |  Discount ({disc_label}): -₹{disc:,.2f}  |  "
                         f"Total: ₹{tot:,.2f}"
                     )
 
@@ -247,6 +263,7 @@ def build_transaction_form(
             search.on("update:model-value", lambda _: ui.timer(0.25, do_search, once=True))
             tax_inp.on_value_change(lambda _: update_totals())
             discount_inp.on_value_change(lambda _: update_totals())
+            discount_type_sel.on_value_change(lambda _: update_totals())
             refresh_lines()
 
             def save():
@@ -260,8 +277,8 @@ def build_transaction_form(
                         client_id = int(str(sel).split(":")[0])
                     except ValueError:
                         pass
-                tax_on, tax_rate, discount_pct = get_rates()
-                sub, disc, tax, tot = calc_totals(line_items, tax_rate, discount_pct, tax_on)
+                tax_on, tax_rate, discount_val, dtype = get_rates()
+                sub, disc, tax, tot = calc_totals(line_items, tax_rate, discount_val, tax_on, dtype)
                 for item in line_items:
                     if "unit_cost" not in item:
                         item["unit_cost"] = _unit_cost_for_item(item["item_type"], item["item_id"])
@@ -272,7 +289,8 @@ def build_transaction_form(
                     tax_enabled=tax_on,
                     tax_rate=tax_rate,
                     tax_amount=tax,
-                    discount_percent=discount_pct,
+                    discount_type=dtype,
+                    discount_percent=discount_val,
                     discount_amount=disc,
                     total=tot,
                     notes=(notes.value or "").strip(),
