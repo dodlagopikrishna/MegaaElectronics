@@ -1,0 +1,4 @@
+# Build-time dependencies (not shipped with the app).
+# Install alongside requirements.txt on the Windows build machine:
+#     pip install -r requirements.txt -r requirements-build.txt
+pyinstaller>=6.0

@@ -3,6 +3,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import app_config
+app_config.load_config()
+
 from nicegui import app, ui
 from nicegui.helpers.network import format_url
 

@@ -1,0 +1,121 @@
+; ---------------------------------------------------------------------------
+; Inno Setup Script for MEGAA Electronics
+; ---------------------------------------------------------------------------
+; Prerequisites:
+;   1. Build the exe first:  pyinstaller megaa.spec
+;   2. Compile this script:  "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+;
+; Output:  installer_output\MEGAA_Electronics_Setup.exe
+; ---------------------------------------------------------------------------
+
+#define MyAppName      "MEGAA Electronics"
+#define MyAppVersion   "1.0.0"
+#define MyAppPublisher "MEGAA Electronics"
+#define MyAppExeName   "MEGAA Electronics.exe"
+
+[Setup]
+AppId={{8A3F2D1E-5B7C-4E9A-B6D8-1F3C5A7E9B2D}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+DefaultDirName={autopf}\{#MyAppName}
+DefaultGroupName={#MyAppName}
+DisableProgramGroupPage=yes
+OutputDir=installer_output
+OutputBaseFilename=MEGAA_Electronics_Setup
+Compression=lzma2/ultra64
+SolidCompression=yes
+WizardStyle=modern
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallMode=x64compatible
+PrivilegesRequired=lowest
+SetupIconFile=assets\megaa_electronics_logo.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[Files]
+; Copy the entire PyInstaller output folder
+Source: "dist\MEGAA Electronics\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{group}\{#MyAppName}";  Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+; ---------------------------------------------------------------------------
+; Pascal Script — custom wizard pages for DB and PDF export directories,
+; plus config.json generation at the end of installation.
+; ---------------------------------------------------------------------------
+[Code]
+
+var
+  DbDirPage: TInputDirWizardPage;
+  ExportDirPage: TInputDirWizardPage;
+
+procedure InitializeWizard;
+begin
+  { Database storage location — shown right after the install dir page }
+  DbDirPage := CreateInputDirPage(wpSelectDir,
+    'Database Storage Location',
+    'Where should the application database be stored?',
+    'The database file will be created in the folder below. ' +
+    'You can use the default location or choose a custom folder.' + #13#10 + #13#10 +
+    'Click Browse to select a different folder, then click Next to continue.',
+    False, '');
+  DbDirPage.Add('');
+  DbDirPage.Values[0] := ExpandConstant('{userappdata}\{#MyAppName}');
+
+  { PDF export location — shown after the DB page }
+  ExportDirPage := CreateInputDirPage(DbDirPage.ID,
+    'PDF Export Location',
+    'Where should PDF estimates and invoices be saved?',
+    'Generated PDF files (quotes, invoices) will be saved in the folder below.' + #13#10 + #13#10 +
+    'Click Browse to select a different folder, then click Next to continue.',
+    False, '');
+  ExportDirPage.Add('');
+  ExportDirPage.Values[0] := ExpandConstant('{userdocs}\{#MyAppName}\Exports');
+end;
+
+function EscapeBackslashes(const S: String): String;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 1 to Length(S) do
+  begin
+    if S[I] = '\' then
+      Result := Result + '\\'
+    else
+      Result := Result + S[I];
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ConfigContent: String;
+  ConfigPath: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    { Ensure the user-chosen directories exist }
+    ForceDirectories(DbDirPage.Values[0]);
+    ForceDirectories(ExportDirPage.Values[0]);
+
+    { Write config.json next to the executable }
+    ConfigPath := ExpandConstant('{app}\config.json');
+    ConfigContent :=
+      '{' + #13#10 +
+      '  "db_dir": "' + EscapeBackslashes(DbDirPage.Values[0]) + '",' + #13#10 +
+      '  "export_dir": "' + EscapeBackslashes(ExportDirPage.Values[0]) + '"' + #13#10 +
+      '}' + #13#10;
+    SaveStringToFile(ConfigPath, ConfigContent, False);
+  end;
+end;

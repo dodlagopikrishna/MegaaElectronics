@@ -2,13 +2,22 @@ import sqlite3
 import os
 import platform
 
+from app_config import get_db_dir
 from store_config import STORE_DB_FILENAME, STORE_NAME
 
 SCHEMA_VERSION = 1
 
 
 def _get_app_data_dir():
-    """Return the platform-appropriate application data directory."""
+    """Return the application data directory.
+
+    Uses the path from config.json (written by the installer) when available,
+    otherwise falls back to the platform-appropriate default.
+    """
+    configured = get_db_dir()
+    if configured:
+        return configured
+
     app_name = STORE_NAME
     system = platform.system()
 

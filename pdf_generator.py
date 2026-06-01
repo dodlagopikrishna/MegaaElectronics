@@ -1,9 +1,11 @@
 from fpdf import FPDF
 from datetime import datetime
 import os
+import sys
 
 from PIL import Image
 
+from app_config import get_export_dir
 from store_config import (
     STORE_ADDRESS,
     STORE_CITY,
@@ -15,8 +17,22 @@ from store_config import (
 )
 
 
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "exports")
-ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+def _resolve_base_dir():
+    """Return the directory containing bundled data (assets, default exports)."""
+    if getattr(sys, "frozen", False):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _resolve_output_dir():
+    configured = get_export_dir()
+    if configured:
+        return configured
+    return os.path.join(_resolve_base_dir(), "exports")
+
+
+OUTPUT_DIR = _resolve_output_dir()
+ASSETS_DIR = os.path.join(_resolve_base_dir(), "assets")
 PDF_LOGO_CACHE = os.path.join(ASSETS_DIR, "megaa_electronics_logo_pdf.png")
 
 MARGIN = 15
