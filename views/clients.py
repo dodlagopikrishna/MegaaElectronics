@@ -164,8 +164,8 @@ def render_clients():
                         else:
                             ui.label("—").classes("text-sm font-semibold")
                     ui.separator()
-                    ui.label("Referred Clients").classes("text-sm font-medium text-gray-600")
                     referred = data.get("referred_clients") or []
+                    ui.label(f"Referred clients - {len(referred)}").classes("text-sm font-medium text-gray-600")
                     if not referred:
                         ui.label("—").classes("text-sm font-semibold")
                     else:
