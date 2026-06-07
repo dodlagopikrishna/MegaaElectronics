@@ -1,6 +1,8 @@
 from database_setup import get_connection
 from datetime import datetime
 
+from text_utils import to_title_case
+
 
 # ── Products ──────────────────────────────────────────────────────────
 
@@ -25,6 +27,7 @@ def get_product(product_id):
 
 
 def add_product(name, category, buy_price, sell_price, stock_count, unit):
+    name = to_title_case((name or "").strip())
     conn = get_connection()
     conn.execute(
         "INSERT INTO products (name, category, buy_price, sell_price, stock_count, unit) VALUES (?,?,?,?,?,?)",
@@ -35,6 +38,7 @@ def add_product(name, category, buy_price, sell_price, stock_count, unit):
 
 
 def update_product(product_id, name, category, buy_price, sell_price, stock_count, unit):
+    name = to_title_case((name or "").strip())
     conn = get_connection()
     conn.execute(
         "UPDATE products SET name=?, category=?, buy_price=?, sell_price=?, stock_count=?, unit=? WHERE id=?",
@@ -94,6 +98,8 @@ def get_service(service_id):
 
 
 def add_service(name, description, rate, worker_cost, rate_type, service_type):
+    name = to_title_case((name or "").strip())
+    description = to_title_case((description or "").strip())
     conn = get_connection()
     conn.execute(
         "INSERT INTO services (name, description, rate, worker_cost, rate_type, service_type) VALUES (?,?,?,?,?,?)",
@@ -104,6 +110,8 @@ def add_service(name, description, rate, worker_cost, rate_type, service_type):
 
 
 def update_service(service_id, name, description, rate, worker_cost, rate_type, service_type):
+    name = to_title_case((name or "").strip())
+    description = to_title_case((description or "").strip())
     conn = get_connection()
     conn.execute(
         "UPDATE services SET name=?, description=?, rate=?, worker_cost=?, rate_type=?, service_type=? WHERE id=?",
@@ -143,6 +151,8 @@ def get_client(client_id):
 
 
 def add_client(name, phone, email, address, location=""):
+    name = to_title_case((name or "").strip())
+    address = to_title_case((address or "").strip())
     conn = get_connection()
     conn.execute(
         "INSERT INTO clients (name, phone, email, address, location) VALUES (?,?,?,?,?)",
@@ -153,6 +163,8 @@ def add_client(name, phone, email, address, location=""):
 
 
 def update_client(client_id, name, phone, email, address, location=""):
+    name = to_title_case((name or "").strip())
+    address = to_title_case((address or "").strip())
     conn = get_connection()
     conn.execute(
         "UPDATE clients SET name=?, phone=?, email=?, address=?, location=? WHERE id=?",

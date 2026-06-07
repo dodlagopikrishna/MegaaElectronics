@@ -432,7 +432,20 @@ def card(interactive: bool = False):
     return ui.card().classes(f"{base} p-4")
 
 
-def labeled_input(label: str, *, password: bool = False, placeholder: str = ""):
+def _bind_title_case(field) -> None:
+    from text_utils import to_title_case
+
+    def apply():
+        val = field.value
+        if val:
+            formatted = to_title_case(val)
+            if formatted != val:
+                field.value = formatted
+
+    field.on("blur", apply)
+
+
+def labeled_input(label: str, *, password: bool = False, placeholder: str = "", title_case: bool = False):
     ui.label(label).classes(TEXT_LABEL)
     props = "outlined dense"
     if password:
@@ -440,6 +453,8 @@ def labeled_input(label: str, *, password: bool = False, placeholder: str = ""):
     else:
         inp = ui.input(placeholder=placeholder).props(props)
     inp.classes(INPUT)
+    if title_case:
+        _bind_title_case(inp)
     return inp
 
 
@@ -449,9 +464,11 @@ def labeled_select(label: str, options: list, *, with_input: bool = True):
     return sel
 
 
-def labeled_textarea(label: str, *, rows: int = 3):
+def labeled_textarea(label: str, *, rows: int = 3, title_case: bool = False):
     ui.label(label).classes(TEXT_LABEL)
     ta = ui.textarea().props(f"outlined dense rows={rows}").classes(INPUT)
+    if title_case:
+        _bind_title_case(ta)
     return ta
 
 

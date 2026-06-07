@@ -9,6 +9,7 @@ from country_phone_codes import (
     parse_phone,
 )
 from models import get_all_clients, add_client, update_client, delete_client, get_client
+from text_utils import to_title_case
 from login_manager import CurrentUser, get_active_users_with_phone
 from whatsapp_share import share_client_via_whatsapp
 from ui_theme import (
@@ -105,7 +106,7 @@ def render_clients():
         with detail_panel:
             with card():
                 ui.label("Edit Client" if data else "Add Client").classes("text-lg font-bold mb-3")
-                name = labeled_input("Name")
+                name = labeled_input("Name", title_case=True)
                 ui.label("Phone").classes(TEXT_LABEL)
                 with ui.row().classes("w-full gap-2 items-start flex-nowrap"):
                     phone_code = (
@@ -119,7 +120,7 @@ def render_clients():
                         .classes(f"{INPUT} flex-grow min-w-0")
                     )
                 email = labeled_input("Email")
-                address = labeled_textarea("Address")
+                address = labeled_textarea("Address", title_case=True)
                 location = labeled_input("Location (Google Maps URL)")
                 if data:
                     name.value = data["name"]
@@ -131,7 +132,7 @@ def render_clients():
                     location.value = data.get("location", "")
 
                 def save():
-                    n = (name.value or "").strip()
+                    n = to_title_case((name.value or "").strip())
                     if not n:
                         notify_warning("Client name is required.")
                         return
@@ -140,7 +141,7 @@ def render_clients():
                         phone_number.value,
                     )
                     em = (email.value or "").strip()
-                    ad = (address.value or "").strip()
+                    ad = to_title_case((address.value or "").strip())
                     loc = (location.value or "").strip()
                     if state["editing_id"]:
                         update_client(state["editing_id"], n, ph, em, ad, loc)

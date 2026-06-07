@@ -13,6 +13,7 @@ from models import (
     get_service,
 )
 from login_manager import CurrentUser
+from text_utils import to_title_case
 from ui_theme import (
     page_shell,
     card,
@@ -102,7 +103,7 @@ def render_products():
         with detail_panel:
             with card():
                 ui.label("Edit Product" if data else "Add Product").classes("text-lg font-bold mb-3")
-                name = labeled_input("Name")
+                name = labeled_input("Name", title_case=True)
                 category = labeled_select(
                     "Category", ["CCTV", "Projector", "Accessories", "Other"]
                 )
@@ -121,7 +122,7 @@ def render_products():
 
                 def save():
                     try:
-                        n = (name.value or "").strip()
+                        n = to_title_case((name.value or "").strip())
                         if not n:
                             notify_warning("Product name is required.")
                             return
@@ -155,8 +156,8 @@ def render_products():
         with detail_panel:
             with card():
                 ui.label("Edit Service" if data else "Add Service").classes("text-lg font-bold mb-3")
-                name = labeled_input("Name")
-                desc = labeled_input("Description")
+                name = labeled_input("Name", title_case=True)
+                desc = labeled_input("Description", title_case=True)
                 rate = labeled_input("Charge Rate (₹)")
                 worker = labeled_input("Worker Cost (₹)") if show_cost else None
                 rate_type = labeled_select("Rate Type", ["Flat Fee", "Hourly Rate"])
@@ -172,7 +173,7 @@ def render_products():
 
                 def save():
                     try:
-                        n = (name.value or "").strip()
+                        n = to_title_case((name.value or "").strip())
                         if not n:
                             notify_warning("Service name is required.")
                             return
@@ -185,7 +186,7 @@ def render_products():
                             update_service(
                                 state["editing_id"],
                                 n,
-                                (desc.value or "").strip(),
+                                to_title_case((desc.value or "").strip()),
                                 float(rate.value or 0),
                                 wc,
                                 rate_type.value,
@@ -194,7 +195,7 @@ def render_products():
                         else:
                             add_service(
                                 n,
-                                (desc.value or "").strip(),
+                                to_title_case((desc.value or "").strip()),
                                 float(rate.value or 0),
                                 wc,
                                 rate_type.value,
