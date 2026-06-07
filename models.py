@@ -1,3 +1,5 @@
+import sqlite3
+
 from database_setup import get_connection
 from datetime import datetime
 
@@ -154,12 +156,14 @@ def add_client(name, phone, email, address, location=""):
     name = to_title_case((name or "").strip())
     address = to_title_case((address or "").strip())
     conn = get_connection()
-    conn.execute(
+    cursor = conn.execute(
         "INSERT INTO clients (name, phone, email, address, location) VALUES (?,?,?,?,?)",
         (name, phone, email, address, location),
     )
     conn.commit()
+    client_id = cursor.lastrowid
     conn.close()
+    return client_id
 
 
 def update_client(client_id, name, phone, email, address, location=""):
@@ -176,9 +180,96 @@ def update_client(client_id, name, phone, email, address, location=""):
 
 def delete_client(client_id):
     conn = get_connection()
-    conn.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+    try:
+        conn.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM client_referrals WHERE referrer_client_id = ?",
+            (client_id,),
+        ).fetchone()[0]
+        conn.close()
+        raise ValueError(
+            f"Cannot delete — this client has referred {count} customer(s). "
+            "Reassign their referrals first."
+        ) from None
+    conn.close()
+
+
+def get_client_referrer(client_id):
+    conn = get_connection()
+    row = conn.execute(
+        """
+        SELECT c.* FROM clients c
+        JOIN client_referrals r ON r.referrer_client_id = c.id
+        WHERE r.client_id = ?
+        """,
+        (client_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_referred_clients(referrer_client_id):
+    conn = get_connection()
+    rows = conn.execute(
+        """
+        SELECT c.* FROM clients c
+        JOIN client_referrals r ON r.client_id = c.id
+        WHERE r.referrer_client_id = ?
+        ORDER BY c.name
+        """,
+        (referrer_client_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def count_referrals_as_referrer(client_id):
+    conn = get_connection()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM client_referrals WHERE referrer_client_id = ?",
+        (client_id,),
+    ).fetchone()[0]
+    conn.close()
+    return count
+
+
+def set_client_referrer(client_id, referrer_client_id):
+    if client_id == referrer_client_id:
+        raise ValueError("A client cannot refer themselves.")
+    conn = get_connection()
+    if not conn.execute("SELECT 1 FROM clients WHERE id = ?", (client_id,)).fetchone():
+        conn.close()
+        raise ValueError("Client not found.")
+    if not conn.execute("SELECT 1 FROM clients WHERE id = ?", (referrer_client_id,)).fetchone():
+        conn.close()
+        raise ValueError("Referrer client not found.")
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO client_referrals (client_id, referrer_client_id)
+        VALUES (?, ?)
+        """,
+        (client_id, referrer_client_id),
+    )
     conn.commit()
     conn.close()
+
+
+def clear_client_referrer(client_id):
+    conn = get_connection()
+    conn.execute("DELETE FROM client_referrals WHERE client_id = ?", (client_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_client_with_referrals(client_id):
+    client = get_client(client_id)
+    if not client:
+        return None
+    client["referrer"] = get_client_referrer(client_id)
+    client["referred_clients"] = get_referred_clients(client_id)
+    return client
 
 
 # ── Line item helpers ─────────────────────────────────────────────────

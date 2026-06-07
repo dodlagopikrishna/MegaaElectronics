@@ -5,7 +5,7 @@ import platform
 from app_config import get_db_dir
 from store_config import STORE_DB_FILENAME, STORE_NAME
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _get_app_data_dir():
@@ -76,6 +76,16 @@ def initialize_database():
             address TEXT DEFAULT '',
             location TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS client_referrals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER NOT NULL UNIQUE
+                REFERENCES clients(id) ON DELETE CASCADE,
+            referrer_client_id INTEGER NOT NULL
+                REFERENCES clients(id) ON DELETE RESTRICT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CHECK (client_id != referrer_client_id)
         );
 
         CREATE TABLE IF NOT EXISTS estimates (
@@ -209,6 +219,7 @@ def initialize_database():
         CREATE INDEX IF NOT EXISTS idx_invoices_source_estimate_id ON invoices(source_estimate_id);
         CREATE INDEX IF NOT EXISTS idx_estimate_items_estimate_id ON estimate_items(estimate_id);
         CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items(invoice_id);
+        CREATE INDEX IF NOT EXISTS idx_client_referrals_referrer ON client_referrals(referrer_client_id);
         CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_client ON maintenance_schedules(client_id);
         CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_status ON maintenance_schedules(status);
         CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_due ON maintenance_schedules(next_due_date);

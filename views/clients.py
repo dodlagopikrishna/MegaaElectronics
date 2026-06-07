@@ -8,7 +8,17 @@ from country_phone_codes import (
     format_phone,
     parse_phone,
 )
-from models import get_all_clients, add_client, update_client, delete_client, get_client
+from models import (
+    get_all_clients,
+    add_client,
+    update_client,
+    delete_client,
+    get_client,
+    get_client_referrer,
+    get_client_with_referrals,
+    set_client_referrer,
+    clear_client_referrer,
+)
 from text_utils import to_title_case
 from login_manager import CurrentUser, get_active_users_with_phone
 from whatsapp_share import share_client_via_whatsapp
@@ -17,6 +27,7 @@ from ui_theme import (
     card,
     labeled_input,
     labeled_textarea,
+    labeled_select,
     split_panels,
     form_actions_row,
     toolbar,
@@ -33,6 +44,14 @@ from ui_theme import (
     TEXT_BODY,
     CARD,
 )
+
+_NONE_REFERRER = "-- None --"
+
+
+def _parse_client_option(value):
+    if not value or value == _NONE_REFERRER:
+        return None
+    return int(value.split(":", 1)[0])
 
 
 def render_clients():
@@ -62,6 +81,10 @@ def render_clients():
                                 detail += " · Map link"
                             ui.label(detail).classes("text-sm text-gray-500")
                         with ui.row().classes("gap-2"):
+                            ghost_button(
+                                "View",
+                                on_click=lambda cid=c["id"]: view_client(cid),
+                            )
                             ghost_button(
                                 "WhatsApp",
                                 on_click=lambda client=c: _share_client(client),
@@ -98,7 +121,65 @@ def render_clients():
         state["editing_id"] = None
         detail_panel.clear()
         with detail_panel:
-            empty_state("Select a client to edit or click 'Add Client'")
+            empty_state("Select a client to view or edit, or click 'Add Client'")
+
+    def _display_value(value):
+        text = (value or "").strip()
+        return text if text else "—"
+
+    def view_client(client_id):
+        data = get_client_with_referrals(client_id)
+        if not data:
+            return
+        detail_panel.clear()
+        with detail_panel:
+            with ui.column().classes("w-full gap-3"):
+                ui.label(data["name"]).classes("text-xl font-bold")
+                with card():
+                    fields = [
+                        ("Name", _display_value(data.get("name"))),
+                        ("Phone", _display_value(data.get("phone"))),
+                        ("Email", _display_value(data.get("email"))),
+                        ("Address", _display_value(data.get("address"))),
+                    ]
+                    for label, value in fields:
+                        with ui.row().classes("w-full justify-between py-1 gap-4"):
+                            ui.label(label).classes("text-sm font-medium text-gray-600 shrink-0")
+                            ui.label(value).classes("text-sm font-semibold text-right break-words")
+                    with ui.row().classes("w-full justify-between py-1 gap-4"):
+                        ui.label("Location").classes("text-sm font-medium text-gray-600 shrink-0")
+                        loc = (data.get("location") or "").strip()
+                        if loc:
+                            ui.link("Google Maps link", loc, new_tab=True).classes("text-sm font-semibold")
+                        else:
+                            ui.label("—").classes("text-sm font-semibold")
+                    with ui.row().classes("w-full justify-between py-1 gap-4"):
+                        ui.label("Referred By").classes("text-sm font-medium text-gray-600 shrink-0")
+                        referrer = data.get("referrer")
+                        if referrer:
+                            ghost_button(
+                                referrer["name"],
+                                on_click=lambda rid=referrer["id"]: view_client(rid),
+                            )
+                        else:
+                            ui.label("—").classes("text-sm font-semibold")
+                    ui.separator()
+                    ui.label("Referred Clients").classes("text-sm font-medium text-gray-600")
+                    referred = data.get("referred_clients") or []
+                    if not referred:
+                        ui.label("—").classes("text-sm font-semibold")
+                    else:
+                        with ui.column().classes("w-full gap-1"):
+                            for rc in referred:
+                                with ui.row().classes("w-full justify-between items-center gap-2"):
+                                    ui.label(rc["name"]).classes("text-sm font-semibold")
+                                    ghost_button(
+                                        "View",
+                                        on_click=lambda cid=rc["id"]: view_client(cid),
+                                    )
+                with ui.row().classes("gap-2 flex-wrap"):
+                    ghost_button("WhatsApp", on_click=lambda: _share_client(data))
+                    ghost_button("Back", on_click=show_empty_form)
 
     def show_form(data=None):
         state["editing_id"] = data["id"] if data else None
@@ -122,6 +203,18 @@ def render_clients():
                 email = labeled_input("Email")
                 address = labeled_textarea("Address", title_case=True)
                 location = labeled_input("Location (Google Maps URL)")
+
+                referrer_sel = None
+                if user.has_permission("Clients_Edit"):
+                    all_clients = get_all_clients()
+                    exclude_id = state["editing_id"]
+                    referrer_opts = [_NONE_REFERRER] + [
+                        f"{c['id']}: {c['name']}"
+                        for c in all_clients
+                        if c["id"] != exclude_id
+                    ]
+                    referrer_sel = labeled_select("Referred By", referrer_opts)
+
                 if data:
                     name.value = data["name"]
                     code, number = parse_phone(data.get("phone", ""))
@@ -130,6 +223,12 @@ def render_clients():
                     email.value = data.get("email", "")
                     address.value = data.get("address", "")
                     location.value = data.get("location", "")
+                    if referrer_sel:
+                        referrer = get_client_referrer(data["id"])
+                        if referrer:
+                            referrer_sel.value = f"{referrer['id']}: {referrer['name']}"
+                        else:
+                            referrer_sel.value = _NONE_REFERRER
 
                 def save():
                     n = to_title_case((name.value or "").strip())
@@ -144,13 +243,25 @@ def render_clients():
                     ad = to_title_case((address.value or "").strip())
                     loc = (location.value or "").strip()
                     if state["editing_id"]:
-                        update_client(state["editing_id"], n, ph, em, ad, loc)
+                        client_id = state["editing_id"]
+                        update_client(client_id, n, ph, em, ad, loc)
                     else:
-                        add_client(n, ph, em, ad, loc)
+                        client_id = add_client(n, ph, em, ad, loc)
+
+                    if referrer_sel:
+                        referrer_id = _parse_client_option(referrer_sel.value)
+                        try:
+                            if referrer_id is None:
+                                clear_client_referrer(client_id)
+                            else:
+                                set_client_referrer(client_id, referrer_id)
+                        except ValueError as exc:
+                            notify_warning(str(exc))
+                            return
+
                     notify_success("Client saved.")
                     refresh_table()
                     show_empty_form()
-
 
                 with form_actions_row():
                     success_button("Save", on_click=save)
@@ -163,7 +274,11 @@ def render_clients():
 
     def del_client(client_id):
         def do_delete():
-            delete_client(client_id)
+            try:
+                delete_client(client_id)
+            except ValueError as exc:
+                notify_warning(str(exc))
+                return
             notify_success("Client deleted.")
             refresh_table()
             show_empty_form()
