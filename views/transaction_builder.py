@@ -35,6 +35,18 @@ def calc_totals(line_items, tax_rate: float, discount_value: float, tax_enabled:
     return subtotal, discount_amt, tax_amt, total
 
 
+def _add_or_increment_line_item(line_items: list, item: dict) -> None:
+    for existing in line_items:
+        if (
+            existing["item_type"] == item["item_type"]
+            and existing["item_id"] == item["item_id"]
+        ):
+            existing["quantity"] += item.get("quantity", 1)
+            existing["total_price"] = existing["quantity"] * existing["unit_price"]
+            return
+    line_items.append(item)
+
+
 def build_transaction_form(
     detail_panel,
     *,
@@ -211,7 +223,8 @@ def build_transaction_form(
                     for p in products[:5]:
 
                         def add_p(item=p):
-                            line_items.append(
+                            _add_or_increment_line_item(
+                                line_items,
                                 {
                                     "item_type": "product",
                                     "item_id": item["id"],
@@ -221,7 +234,7 @@ def build_transaction_form(
                                     "unit_price": item["sell_price"],
                                     "unit_cost": item["buy_price"],
                                     "total_price": item["sell_price"],
-                                }
+                                },
                             )
                             search.value = ""
                             results_box.clear()
@@ -236,7 +249,8 @@ def build_transaction_form(
                     for s in services[:5]:
 
                         def add_s(item=s):
-                            line_items.append(
+                            _add_or_increment_line_item(
+                                line_items,
                                 {
                                     "item_type": "service",
                                     "item_id": item["id"],
@@ -246,7 +260,7 @@ def build_transaction_form(
                                     "unit_price": item["rate"],
                                     "unit_cost": item.get("worker_cost", 0),
                                     "total_price": item["rate"],
-                                }
+                                },
                             )
                             search.value = ""
                             results_box.clear()
