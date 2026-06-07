@@ -188,14 +188,6 @@ def _normalize_item(item):
     return normalized
 
 
-def sort_line_items(items):
-    """Sort items: products first (by name), then services (by name)."""
-    return sorted(
-        items,
-        key=lambda x: (0 if x.get("item_type") == "product" else 1, (x.get("item_name") or "").lower()),
-    )
-
-
 def _insert_estimate_items(cursor, estimate_id, items):
     for item in items:
         item = _normalize_item(item)
@@ -317,7 +309,7 @@ def get_estimate(estimate_id):
 def get_estimate_items(estimate_id):
     conn = get_connection()
     rows = conn.execute(
-        "SELECT * FROM estimate_items WHERE estimate_id = ? ORDER BY item_type ASC, item_name ASC",
+        "SELECT * FROM estimate_items WHERE estimate_id = ? ORDER BY id ASC",
         (estimate_id,),
     ).fetchall()
     conn.close()
@@ -475,7 +467,7 @@ def get_invoice(invoice_id):
 def get_invoice_items(invoice_id):
     conn = get_connection()
     rows = conn.execute(
-        "SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY item_type ASC, item_name ASC",
+        "SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY id ASC",
         (invoice_id,),
     ).fetchall()
     conn.close()

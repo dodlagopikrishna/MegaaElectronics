@@ -203,11 +203,6 @@ def generate_transaction_pdf(transaction, items, save_path=None):
     pdf.alias_nb_pages()
     pdf.add_page()
 
-    items = sorted(
-        items,
-        key=lambda x: (0 if x.get("item_type") == "product" else 1, (x.get("item_name") or "").lower()),
-    )
-
     doc_date = _format_date(transaction.get("date"))
     status = transaction.get("status", "Pending")
 

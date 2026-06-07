@@ -2,7 +2,7 @@
 
 from nicegui import ui
 
-from models import get_all_clients, get_all_products, get_all_services, _unit_cost_for_item, sort_line_items
+from models import get_all_clients, get_all_products, get_all_services, _unit_cost_for_item
 from store_config import DEFAULT_GST_RATE
 from ui_theme import (
     LIST_ROW,
@@ -61,7 +61,6 @@ def build_transaction_form(
                     "total_price": item["total_price"],
                 }
             )
-        line_items.sort(key=lambda x: (0 if x["item_type"] == "product" else 1, (x.get("item_name") or "").lower()))
 
     detail_panel.clear()
     with detail_panel:
@@ -162,7 +161,6 @@ def build_transaction_form(
 
             def refresh_lines():
                 items_box.clear()
-                line_items.sort(key=lambda x: (0 if x["item_type"] == "product" else 1, (x.get("item_name") or "").lower()))
                 with items_box:
                     if not line_items:
                         ui.label("No items added yet.").classes("text-gray-500 text-sm")
