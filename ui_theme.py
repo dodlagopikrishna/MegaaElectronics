@@ -693,8 +693,8 @@ def confirm_dialog(title: str, message: str, on_confirm):
                 dialog.close()
 
                 def finish():
-                    _cleanup()
                     on_confirm()
+                    _cleanup()
 
                 ui.timer(0.2, finish, once=True)
 
