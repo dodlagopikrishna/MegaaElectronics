@@ -376,7 +376,7 @@ def generate_transaction_pdf(transaction, items, save_path=None):
         ]
     else:
         terms = [
-            "1. This quotation is valid for 30 days from the date of issue.",
+            "1. This quotation is valid for 1 week from the date of issue.",
             "2. Payment terms: 50% deposit upon confirmation, balance upon completion.",
             "3. Warranty: 1 year on hardware, 90 days on installation workmanship.",
             "4. Prices are subject to change without prior notice.",
