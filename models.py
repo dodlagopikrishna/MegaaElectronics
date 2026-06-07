@@ -3,6 +3,7 @@ import sqlite3
 from database_setup import get_connection
 from datetime import datetime
 
+from store_config import WARRANTY_PERIOD_YEARS, WARRANTY_REMINDER_DAYS_BEFORE
 from text_utils import to_title_case
 
 
@@ -751,6 +752,41 @@ def delete_maintenance_schedule(schedule_id):
 
 # ── Dashboard Stats ───────────────────────────────────────────────────
 
+def get_warranty_reminders():
+    period = f"+{WARRANTY_PERIOD_YEARS} year"
+    reminder_window = f"-{WARRANTY_REMINDER_DAYS_BEFORE} days"
+    conn = get_connection()
+    rows = conn.execute(
+        f"""SELECT i.id AS invoice_id, i.date, i.status,
+                   COALESCE(c.name, 'Walk-in Customer') AS client_name,
+                   date(i.date, ?) AS warranty_expiry
+            FROM invoices i
+            LEFT JOIN clients c ON i.client_id = c.id
+            LEFT JOIN warranty_reminder_acknowledgments wa ON wa.invoice_id = i.id
+            WHERE wa.invoice_id IS NULL
+              AND EXISTS (
+                  SELECT 1 FROM invoice_items ii
+                  WHERE ii.invoice_id = i.id AND ii.item_type = 'product'
+              )
+              AND date('now') >= date(i.date, ?, ?)
+            ORDER BY warranty_expiry ASC""",
+        (period, period, reminder_window),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def acknowledge_warranty_reminder(invoice_id, user_id=None):
+    conn = get_connection()
+    conn.execute(
+        """INSERT OR IGNORE INTO warranty_reminder_acknowledgments
+           (invoice_id, acknowledged_by) VALUES (?, ?)""",
+        (invoice_id, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 def get_dashboard_stats(date_from, date_to):
     conn = get_connection()
     stats = {}
@@ -815,6 +851,7 @@ def get_dashboard_stats(date_from, date_to):
            ORDER BY ms.next_due_date ASC"""
     ).fetchall()
     stats["maintenance_reminders"] = [dict(r) for r in maintenance]
+    stats["warranty_reminders"] = get_warranty_reminders()
 
     row = conn.execute(
         """SELECT COALESCE(SUM(discount_amount), 0) as total_discounts

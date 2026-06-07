@@ -167,6 +167,14 @@ def initialize_database():
             FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS warranty_reminder_acknowledgments (
+            invoice_id INTEGER PRIMARY KEY,
+            acknowledged_at TEXT DEFAULT (datetime('now')),
+            acknowledged_by INTEGER,
+            FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE,
+            FOREIGN KEY (acknowledged_by) REFERENCES users(id)
+        );
+
         CREATE TABLE IF NOT EXISTS roles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             role_name TEXT NOT NULL UNIQUE

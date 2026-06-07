@@ -680,17 +680,31 @@ def empty_state(message: str):
 
 
 def confirm_dialog(title: str, message: str, on_confirm):
-    with ui.dialog() as dialog, ui.card().classes(f"{CARD} p-4"):
-        ui.label(title).classes(TEXT_HEADING)
-        ui.label(message).classes(TEXT_BODY)
-        with ui.row().classes("w-full justify-end gap-2 mt-4"):
-            ghost_button("Cancel", on_click=dialog.close)
+    with ui.context.client.layout:
+        with ui.dialog() as dialog, ui.card().classes(f"{CARD} p-4"):
+            ui.label(title).classes(TEXT_HEADING)
+            ui.label(message).classes(TEXT_BODY)
+
+            def _cleanup():
+                if not dialog.is_deleted:
+                    dialog.delete()
 
             def confirm():
                 dialog.close()
-                on_confirm()
 
-            danger_button("Confirm", on_click=confirm)
+                def finish():
+                    _cleanup()
+                    on_confirm()
+
+                ui.timer(0.2, finish, once=True)
+
+            def cancel():
+                dialog.close()
+                ui.timer(0.2, _cleanup, once=True)
+
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ghost_button("Cancel", on_click=cancel)
+                danger_button("Confirm", on_click=confirm)
     dialog.open()
 
 

@@ -2,7 +2,8 @@ from datetime import date
 
 from nicegui import ui
 
-from models import get_dashboard_stats
+from login_manager import CurrentUser
+from models import acknowledge_warranty_reminder, get_dashboard_stats, mark_maintenance_completed
 from views.maintenance import format_schedule_due
 from ui_theme import (
     page_shell,
@@ -11,11 +12,19 @@ from ui_theme import (
     collapsible_stat_group,
     stat_card,
     ghost_button,
+    confirm_dialog,
     PRIMARY,
     SUCCESS,
 )
 
 _DATE_INPUT = "ios-field shrink-0 w-40 sm:w-44"
+
+
+def _format_warranty_expiry(warranty_expiry: str) -> str:
+    expiry = date.fromisoformat(warranty_expiry)
+    if expiry >= date.today():
+        return f"Expires {warranty_expiry}"
+    return f"Expired {warranty_expiry}"
 
 
 def render_dashboard():
@@ -94,7 +103,7 @@ def render_dashboard():
 
                 stat_card("Total Clients", str(stats["total_clients"]), "#64748b")
 
-            with ui.grid().classes("w-full gap-4 grid-cols-1 md:grid-cols-2 mt-4"):
+            with ui.grid().classes("w-full gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-4"):
                 with card():
                     ui.label("Low Stock Alerts").classes("text-base font-bold text-red-500 mb-2")
                     if stats["low_stock"]:
@@ -112,18 +121,78 @@ def render_dashboard():
                     )
                     if stats["maintenance_reminders"]:
                         for r in stats["maintenance_reminders"][:10]:
-                            with ui.row().classes("w-full justify-between py-1 text-sm"):
-                                ui.label(f"{r['client_name'] or 'N/A'} — {r['service_name']}")
+                            schedule_id = r["id"]
+                            client_name = r["client_name"] or "N/A"
+                            service_name = r["service_name"]
+
+                            def close_reminder(
+                                schedule_id=schedule_id,
+                                client_name=client_name,
+                                service_name=service_name,
+                            ):
+                                def do_close():
+                                    mark_maintenance_completed(schedule_id)
+                                    load_stats()
+
+                                confirm_dialog(
+                                    "Mark as Completed",
+                                    f"Mark maintenance as completed for {client_name} — {service_name}?",
+                                    do_close,
+                                )
+
+                            with ui.row().classes("w-full items-center justify-between gap-2 py-1"):
+                                ui.label(
+                                    f"{client_name} — {service_name}"
+                                ).classes("text-sm flex-grow")
                                 ui.label(
                                     f"{r['frequency']} · Due: {format_schedule_due(r)}"
-                                ).classes("text-blue-500")
+                                ).classes("text-sm text-blue-500 shrink-0")
+                                ui.button(icon="close", on_click=close_reminder).props(
+                                    "flat dense round aria-label=Mark maintenance completed"
+                                ).classes("shrink-0")
                     else:
                         ui.label("No upcoming maintenance").classes("text-sm text-gray-500")
+
+                with card():
+                    ui.label("Warranty Completion Reminders").classes(
+                        "text-base font-bold mb-2"
+                    ).style(f"color:{PRIMARY}")
+                    if stats["warranty_reminders"]:
+                        for r in stats["warranty_reminders"][:10]:
+                            invoice_id = r["invoice_id"]
+                            client_name = r["client_name"]
+
+                            def close_reminder(invoice_id=invoice_id, client_name=client_name):
+                                def do_close():
+                                    acknowledge_warranty_reminder(
+                                        invoice_id, CurrentUser.get().user_id
+                                    )
+                                    load_stats()
+
+                                confirm_dialog(
+                                    "Close Reminder",
+                                    f"Close warranty reminder for Invoice #{invoice_id} — {client_name}?",
+                                    do_close,
+                                )
+
+                            with ui.row().classes("w-full items-center justify-between gap-2 py-1"):
+                                ui.label(
+                                    f"Invoice #{invoice_id} — {client_name}"
+                                ).classes("text-sm flex-grow")
+                                ui.label(
+                                    _format_warranty_expiry(r["warranty_expiry"])
+                                ).classes("text-sm text-blue-500 shrink-0")
+                                ui.button(icon="close", on_click=close_reminder).props(
+                                    "flat dense round aria-label=Close reminder"
+                                ).classes("shrink-0")
+                    else:
+                        ui.label("No warranty reminders").classes("text-sm text-gray-500")
 
             with card():
                 ui.label(
                     f"Low Stock Items: {len(stats['low_stock'])}  |  "
-                    f"Maintenance Schedules: {len(stats['maintenance_reminders'])}"
+                    f"Maintenance Schedules: {len(stats['maintenance_reminders'])}  |  "
+                    f"Warranty Reminders: {len(stats['warranty_reminders'])}"
                 ).classes("text-sm text-gray-600 w-full")
 
     content = page_shell("Dashboard")
