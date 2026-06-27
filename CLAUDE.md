@@ -42,7 +42,9 @@ python main.py
 ```
 main.py                 # App entry, routing, sidebar shell, static mounts
 store_config.py         # Store branding, GSTIN, DB filename, storage secret
+app_config.py           # Installer-written config.json (db, export, backup paths)
 database_setup.py       # Schema, migrations, app-data paths, seed data
+database_backup.py      # Synced-folder DB snapshots (copy to cloud sync dir)
 models.py               # Data-access layer (CRUD + transactions)
 login_manager.py        # CurrentUser session, auth, user admin APIs
 ui_theme.py             # Design tokens, layout helpers, global CSS
@@ -87,12 +89,16 @@ Do **not** add an ORM or separate API server unless explicitly requested; the pr
 | OS | Path |
 |----|------|
 | macOS | `~/Library/Application Support/MEGAA Electronics/megaa_electronics.db` |
-| Windows | `%APPDATA%\MEGAA Electronics\megaa_electronics.db` |
+| Windows | `%APPDATA%\MEGAA Electronics\megaa_electronics.db` (or installer-chosen `db_dir`) |
 | Linux | `~/.megaa_electronics/megaa_electronics.db` |
 
 Migrations copy from legacy names (`mega_electronics.db`, older app-support folder names) and from a project-local DB if present. Backups are timestamped in the app-data directory before overwrite imports.
 
-**PDF output**: `exports/` next to source (served at `/exports` for preview links).
+**Windows installer** (`installer.iss`): collects `db_dir`, `export_dir`, and **`backup_sync_dir`** (required cloud sync folder) into `config.json` next to the executable. Read via `app_config.get_backup_sync_dir()`.
+
+**Database backup**: `database_backup.run_folder_backup()` creates a SQLite snapshot and copies it into `backup_sync_dir`. Google Drive Desktop / OneDrive / Dropbox syncs the folder off-site — no in-app OAuth.
+
+**PDF output**: `exports/` next to source (served at `/exports` for preview links), or installer-chosen `export_dir` on Windows.
 
 ---
 
@@ -162,6 +168,7 @@ New screens should match existing views (`clients.py`, `products.py`) — same p
 | `quotes.py` | `Quotes_View` | Estimates; builder in `transaction_builder`; PDF + WhatsApp |
 | `invoices.py` | `Invoices_View` | Invoices; convert from estimate; stock on convert |
 | `user_management.py` | `User_Management` | Users + role assignment |
+| `database_backup.py` | `Database_Backup` | Synced-folder snapshots; auto-backup on app close |
 | `change_password.py` | (sidebar menu) | Self-service password change |
 
 **PDF**: `pdf_generator.generate_transaction_pdf` — requires `Export_PDF` in UI.

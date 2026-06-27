@@ -109,6 +109,7 @@ begin
     { Ensure the user-chosen directories exist }
     ForceDirectories(DbDirPage.Values[0]);
     ForceDirectories(ExportDirPage.Values[0]);
+    ForceDirectories(DbDirPage.Values[0] + '\DatabaseBackups');
 
     { Write config.json next to the executable }
     ConfigPath := ExpandConstant('{app}\config.json');

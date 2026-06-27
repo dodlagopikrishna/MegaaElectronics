@@ -5,6 +5,7 @@ builds) or the project root (development).  The Inno Setup installer writes
 this file with the database and PDF-export directories selected by the user
 during installation.  When the file is absent or a key is missing, callers
 fall back to their platform defaults so the dev workflow is unchanged.
+Backup snapshots default to a ``DatabaseBackups`` folder beside the live database.
 """
 
 import json
@@ -31,6 +32,13 @@ def load_config() -> None:
             _config = json.load(fh)
 
 
+def _save_config() -> None:
+    os.makedirs(os.path.dirname(CONFIG_PATH) or ".", exist_ok=True)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
+        json.dump(_config, fh, indent=2)
+        fh.write("\n")
+
+
 def get_db_dir() -> str:
     """Return the configured database directory, or empty string for platform default."""
     return _config.get("db_dir", "")
@@ -39,3 +47,8 @@ def get_db_dir() -> str:
 def get_export_dir() -> str:
     """Return the configured PDF export directory, or empty string for platform default."""
     return _config.get("export_dir", "")
+
+
+def get_backup_sync_dir() -> str:
+    """Return installer-configured backup folder, or empty string for the default."""
+    return _config.get("backup_sync_dir", "")

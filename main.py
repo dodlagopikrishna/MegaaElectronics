@@ -44,6 +44,7 @@ from views.invoices import render_invoices
 from views.maintenance import render_maintenance
 from views.user_management import render_user_management
 from views.change_password import render_change_password
+from views.database_backup import render_database_backup
 
 initialize_database()
 bootstrap_admin()
@@ -56,6 +57,7 @@ NAV_PERMISSIONS = {
     "invoices": "Invoices_View",
     "maintenance": "Maintenance_View",
     "users": "User_Management",
+    "database_backup": "Database_Backup",
 }
 
 NAV_LABELS = {
@@ -66,6 +68,7 @@ NAV_LABELS = {
     "invoices": "Invoices",
     "maintenance": "Maintenance Schedule",
     "users": "User Management",
+    "database_backup": "Database Backup",
 }
 
 NAV_ICONS = {
@@ -76,6 +79,7 @@ NAV_ICONS = {
     "invoices": "receipt_long",
     "maintenance": "build_circle",
     "users": "manage_accounts",
+    "database_backup": "backup",
 }
 
 VIEW_RENDERERS = {
@@ -87,6 +91,7 @@ VIEW_RENDERERS = {
     "maintenance": render_maintenance,
     "users": render_user_management,
     "change_password": render_change_password,
+    "database_backup": render_database_backup,
 }
 
 WINDOW_SIZE = (1280, 780)
@@ -100,7 +105,7 @@ def _is_authenticated():
 
 def _allowed_views():
     current = CurrentUser.get()
-    order = ["dashboard", "products", "clients", "quotes", "invoices", "maintenance", "users"]
+    order = ["dashboard", "products", "clients", "quotes", "invoices", "maintenance", "users", "database_backup"]
     return [k for k in order if current.has_permission(NAV_PERMISSIONS[k])]
 
 
@@ -213,11 +218,74 @@ def home_page():
         ui.label("Retail Management System v1.0.0")
 
 
+def _notify_close_blocked(message: str) -> None:
+    """Show a native alert when close is blocked pending cloud backup."""
+    if sys.platform == "darwin":
+        escaped = message.replace("\\", "\\\\").replace('"', '\\"')
+        import subprocess
+
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                f'display alert "Backup required before closing" message "{escaped}" as warning',
+            ],
+            check=False,
+        )
+    elif sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(  # type: ignore[attr-defined]
+            0, message, f"{STORE_NAME} — Backup", 0x30
+        )
+    else:
+        print(message, file=sys.stderr)
+
+
+def _register_close_backup_handler() -> None:
+    """Block window close until backup snapshot copy succeeds (if configured)."""
+
+    def register_closing():
+        import webview
+
+        from database_backup import is_backup_configured, run_folder_backup
+
+        def on_closing():
+            if not is_backup_configured():
+                return True
+            result = run_folder_backup()
+            if result.get("success"):
+                return True
+            _notify_close_blocked(
+                result.get("message")
+                or "Could not save a database snapshot before closing. "
+                "Retry closing after fixing the backup folder path."
+            )
+            return False
+
+        for window in webview.windows:
+            window.events.closing += on_closing
+
+    app.native.start_args["func"] = register_closing
+
+
+@app.on_shutdown
+def _backup_on_shutdown():
+    from database_backup import is_backup_configured, run_folder_backup
+
+    if is_backup_configured():
+        try:
+            run_folder_backup()
+        except Exception:
+            pass
+
+
 if __name__ in {"__main__", "__mp_main__"}:
     # Native desktop window via pywebview (no external browser tab).
     app.native.window_args["resizable"] = True
     app.native.window_args["min_size"] = (800, 500)
     app.native.window_args["url"] = format_url("http", NATIVE_HOST, NATIVE_PORT) + "/login"
+    _register_close_backup_handler()
 
     ui.run(
         title=f"{STORE_NAME} - Retail Management System",

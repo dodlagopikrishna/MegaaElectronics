@@ -240,6 +240,56 @@ def initialize_database():
     conn.close()
 
     _seed_roles_and_permissions()
+    _ensure_permissions()
+    _migrate_backup_permission()
+    from database_backup import migrate_backup_metadata
+    migrate_backup_metadata()
+
+
+def _migrate_backup_permission():
+    """Rename Google_Drive_Backup permission to Database_Backup on existing databases."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM permissions WHERE module_name = 'Google_Drive_Backup'")
+    old_row = cursor.fetchone()
+    cursor.execute("SELECT id FROM permissions WHERE module_name = 'Database_Backup'")
+    new_row = cursor.fetchone()
+    if old_row and not new_row:
+        cursor.execute(
+            "UPDATE permissions SET module_name = 'Database_Backup' WHERE id = ?",
+            (old_row["id"],),
+        )
+    conn.commit()
+    conn.close()
+
+
+def _ensure_permissions():
+    """Add permissions introduced after initial install (existing databases)."""
+    additions = [
+        ("Database_Backup", ["Admin"]),
+    ]
+    conn = get_connection()
+    cursor = conn.cursor()
+    for perm_name, role_names in additions:
+        cursor.execute(
+            "INSERT OR IGNORE INTO permissions (module_name) VALUES (?)",
+            (perm_name,),
+        )
+        cursor.execute("SELECT id FROM permissions WHERE module_name = ?", (perm_name,))
+        perm_row = cursor.fetchone()
+        if not perm_row:
+            continue
+        perm_id = perm_row["id"]
+        for role_name in role_names:
+            cursor.execute("SELECT id FROM roles WHERE role_name = ?", (role_name,))
+            role_row = cursor.fetchone()
+            if role_row:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
+                    (role_row["id"], perm_id),
+                )
+    conn.commit()
+    conn.close()
 
 
 
@@ -265,7 +315,7 @@ def _seed_roles_and_permissions():
         "Invoices_View", "Invoices_Create", "Invoices_Delete",
         "Maintenance_View", "Maintenance_Edit", "Maintenance_Delete",
         "Cost_Prices", "Financials", "Stock_Edit",
-        "User_Management", "Export_PDF", "Service_Complete",
+        "User_Management", "Export_PDF", "Service_Complete", "Database_Backup",
     ]
     for perm in all_permissions:
         cursor.execute("INSERT INTO permissions (module_name) VALUES (?)", (perm,))
