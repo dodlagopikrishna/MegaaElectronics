@@ -6,6 +6,7 @@ from models import get_all_clients, get_all_products, get_all_services, _unit_co
 from store_config import DEFAULT_GST_RATE
 from ui_theme import (
     LIST_ROW,
+    TEXT_LABEL,
     card,
     labeled_input,
     labeled_select,
@@ -19,13 +20,24 @@ from ui_theme import (
 )
 
 
+def _line_subtotal(line_items) -> float:
+    return sum(item["total_price"] for item in line_items)
+
+
+def _max_discount_value(line_items, discount_type: str) -> float:
+    if discount_type == "percentage":
+        return 100.0
+    return _line_subtotal(line_items)
+
+
 def calc_totals(line_items, tax_rate: float, discount_value: float, tax_enabled: bool = True, discount_type: str = "flat"):
-    subtotal = sum(item["total_price"] for item in line_items)
+    subtotal = _line_subtotal(line_items)
+    discount_value = max(0.0, discount_value)
     if discount_type == "flat":
         discount_amt = min(discount_value, subtotal)
     else:
-        discount_amt = subtotal * (discount_value / 100)
-    after_discount = subtotal - discount_amt
+        discount_amt = subtotal * (min(discount_value, 100.0) / 100)
+    after_discount = max(0.0, subtotal - discount_amt)
     if tax_enabled:
         tax_amt = after_discount * (tax_rate / 100)
         total = after_discount + tax_amt
@@ -95,6 +107,7 @@ def build_transaction_form(
                 results_box = ui.column().classes("w-full gap-1")
 
             items_box = ui.column().classes("w-full gap-2")
+            qty_widgets: list = []
             totals_label = ui.label("").classes(
                 "text-sm text-right text-gray-700 w-full min-w-0 break-words whitespace-normal"
             )
@@ -124,12 +137,17 @@ def build_transaction_form(
                         value=initial_dtype,
                         label="Discount Type",
                     ).props("outlined dense").classes("w-full mb-1")
-                    discount_inp = labeled_input("Discount Value")
-                    discount_inp.value = (
-                        str(initial_transaction.get("discount_percent", 0))
+                    ui.label("Discount Value").classes(TEXT_LABEL)
+                    initial_discount = (
+                        float(initial_transaction.get("discount_percent", 0) or 0)
                         if initial_transaction
-                        else "0"
+                        else 0.0
                     )
+                    discount_inp = ui.number(
+                        value=initial_discount,
+                        min=0,
+                        step=0.01,
+                    ).props("outlined dense").classes(INPUT)
             notes = labeled_textarea("Notes")
             if initial_transaction:
                 notes.value = initial_transaction.get("notes", "") or ""
@@ -151,12 +169,32 @@ def build_transaction_form(
                     tax_rate = 0
                 try:
                     discount_val = float(discount_inp.value or 0)
-                except ValueError:
+                except (TypeError, ValueError):
                     discount_val = 0
                 dtype = discount_type_sel.value or "flat"
                 return tax_on, tax_rate, discount_val, dtype
 
+            def enforce_discount_limits(*, show_warning: bool = False) -> None:
+                dtype = discount_type_sel.value or "flat"
+                max_val = _max_discount_value(line_items, dtype)
+                discount_inp.max = max_val
+                try:
+                    current = float(discount_inp.value or 0)
+                except (TypeError, ValueError):
+                    current = 0.0
+                clamped = max(0.0, min(current, max_val))
+                if clamped != current:
+                    discount_inp.value = clamped
+                    if show_warning:
+                        if dtype == "percentage":
+                            notify_warning("Discount percentage cannot exceed 100%.")
+                        else:
+                            notify_warning(
+                                f"Flat discount cannot exceed subtotal (₹{max_val:,.2f})."
+                            )
+
             def update_totals():
+                enforce_discount_limits()
                 tax_on, tax_rate, discount_val, dtype = get_rates()
                 sub, disc, tax, tot = calc_totals(line_items, tax_rate, discount_val, tax_on, dtype)
                 disc_label = f"{discount_val}%" if dtype == "percentage" else f"₹{discount_val:,.2f}"
@@ -172,6 +210,7 @@ def build_transaction_form(
                     )
 
             def refresh_lines():
+                qty_widgets.clear()
                 items_box.clear()
                 with items_box:
                     if not line_items:
@@ -184,21 +223,38 @@ def build_transaction_form(
                             qty = ui.number(value=item["quantity"], min=1, step=1).props(
                                 "outlined dense"
                             ).classes("w-20")
-
-                            def on_qty(e, i=idx, q=qty):
-                                try:
-                                    n = max(1, int(e.value))
-                                except (TypeError, ValueError):
-                                    n = 1
-                                line_items[i]["quantity"] = n
-                                line_items[i]["total_price"] = n * line_items[i]["unit_price"]
-                                refresh_lines()
-                                update_totals()
-
-                            qty.on_value_change(on_qty)
-                            ui.label(f"₹{item['total_price']:.2f}").classes(
+                            price_label = ui.label(f"₹{item['total_price']:.2f}").classes(
                                 "font-semibold text-sm"
                             )
+
+                            def _apply_qty(n: int, i: int, pl) -> None:
+                                line_items[i]["quantity"] = n
+                                line_items[i]["total_price"] = n * line_items[i]["unit_price"]
+                                pl.text = f"₹{line_items[i]['total_price']:.2f}"
+                                update_totals()
+
+                            def on_qty(e, i=idx, pl=price_label):
+                                if e.value is None or e.value == "":
+                                    return
+                                try:
+                                    n = max(1, int(float(e.value)))
+                                except (TypeError, ValueError):
+                                    return
+                                _apply_qty(n, i, pl)
+
+                            def commit_qty(_, i=idx, q=qty, pl=price_label):
+                                try:
+                                    n = max(1, int(float(q.value if q.value not in (None, "") else 1)))
+                                except (TypeError, ValueError):
+                                    n = 1
+                                if q.value != n:
+                                    q.value = n
+                                _apply_qty(n, i, pl)
+
+                            qty.on_value_change(on_qty)
+                            qty.on("blur", commit_qty)
+                            qty.on("keydown.enter", commit_qty)
+                            qty_widgets.append(qty)
                             danger_button(
                                 "Remove",
                                 on_click=lambda i=idx: (
@@ -274,14 +330,24 @@ def build_transaction_form(
 
             search.on("update:model-value", lambda _: ui.timer(0.25, do_search, once=True))
             tax_inp.on_value_change(lambda _: update_totals())
-            discount_inp.on_value_change(lambda _: update_totals())
-            discount_type_sel.on_value_change(lambda _: update_totals())
+            discount_inp.on_value_change(lambda _: (enforce_discount_limits(show_warning=True), update_totals()))
+            discount_type_sel.on_value_change(
+                lambda _: (enforce_discount_limits(show_warning=True), update_totals())
+            )
             refresh_lines()
 
             def save():
+                for i, q in enumerate(qty_widgets):
+                    try:
+                        n = max(1, int(float(q.value if q.value not in (None, "") else 1)))
+                    except (TypeError, ValueError):
+                        n = 1
+                    line_items[i]["quantity"] = n
+                    line_items[i]["total_price"] = n * line_items[i]["unit_price"]
                 if not line_items:
                     notify_warning("Add at least one item.")
                     return
+                enforce_discount_limits(show_warning=True)
                 client_id = None
                 sel = client_sel.value
                 if sel and sel != "-- Walk-in --":

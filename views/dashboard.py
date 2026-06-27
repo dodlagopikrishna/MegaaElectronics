@@ -73,7 +73,7 @@ def render_dashboard():
                         subtitle=f"{stats['estimates_count']} estimates",
                     )
 
-                net_profit = stats["profit_with_services"] - stats["total_discounts"]
+                net_profit = stats["profit_products_only"] - stats["total_discounts"]
                 with collapsible_stat_group(
                     "Profit",
                     f"₹{net_profit:,.2f}",
@@ -86,8 +86,8 @@ def render_dashboard():
                             "#0ea5e9",
                         )
                         stat_card(
-                            "Gross Profit (incl. services)",
-                            f"₹{stats['profit_with_services']:,.2f}",
+                            "Gross Profit (services only)",
+                            f"₹{stats['profit_services_only']:,.2f}",
                             PRIMARY,
                         )
                         stat_card(

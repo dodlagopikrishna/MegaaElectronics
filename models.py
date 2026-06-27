@@ -823,20 +823,21 @@ def get_dashboard_stats(date_from, date_to):
         """SELECT COALESCE(SUM((ii.unit_price - ii.unit_cost) * ii.quantity), 0) as profit
            FROM invoice_items ii
            JOIN invoices i ON ii.invoice_id = i.id
-           WHERE i.status='Paid' AND i.date >= ? AND i.date <= ?""",
+           WHERE i.status='Paid' AND i.date >= ? AND i.date <= ?
+             AND ii.item_type='product'""",
         (date_from, date_to),
     ).fetchone()
-    stats["profit_with_services"] = row["profit"]
+    stats["profit_products_only"] = row["profit"]
 
     row = conn.execute(
         """SELECT COALESCE(SUM((ii.unit_price - ii.unit_cost) * ii.quantity), 0) as profit
            FROM invoice_items ii
            JOIN invoices i ON ii.invoice_id = i.id
            WHERE i.status='Paid' AND i.date >= ? AND i.date <= ?
-             AND ii.item_type='product'""",
+             AND ii.item_type='service'""",
         (date_from, date_to),
     ).fetchone()
-    stats["profit_products_only"] = row["profit"]
+    stats["profit_services_only"] = row["profit"]
 
     low_stock = conn.execute(
         "SELECT * FROM products WHERE stock_count <= 5 ORDER BY stock_count ASC"
